@@ -45,18 +45,17 @@
       
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
-        in buildPackages pkgs
-      ) // {
-        # Aggregates for CI
-        x86_64-linux.all = (import nixpkgs { system = "x86_64-linux"; }).symlinkJoin {
-          name = "pi-packages-all";
-          paths = builtins.attrValues (buildPackages (import nixpkgs { system = "x86_64-linux"; }));
-        };
-        x86_64-linux.tierA = (import nixpkgs { system = "x86_64-linux"; }).symlinkJoin {
-          name = "pi-packages-tierA";
-          paths = builtins.attrValues (buildTierA (import nixpkgs { system = "x86_64-linux"; }));
-        };
-      };
+        in buildPackages pkgs // {
+          all = pkgs.symlinkJoin {
+            name = "pi-packages-all";
+            paths = builtins.attrValues (buildPackages pkgs);
+          };
+          tierA = pkgs.symlinkJoin {
+            name = "pi-packages-tierA";
+            paths = builtins.attrValues (buildTierA pkgs);
+          };
+        }
+      );
       
       nixosModules.default = import ./modules/nixos.nix;
       homeModules.default = import ./modules/home-manager.nix;
