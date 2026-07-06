@@ -1,0 +1,44 @@
+# Automated registry update - crawls npm for pi-package keyword
+# Runs daily, opens PR if registry.json changes
+
+name: Update Registry
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      
+      - name: Generate registry
+        run: |
+          node registry/generate.mjs > registry/registry.json.new
+          mv registry/registry.json.new registry/registry.json
+      
+      - name: Check for changes
+        id: changes
+        run: |
+          if ! git diff --quiet registry/registry.json; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore: update package registry'
+          title: 'chore: update package registry'
+          body: |
+            Automated registry update from npm.
+            
+            This PR updates the pi package registry with the latest versions and hashes from the npm registry.
+          branch: bot/update-registry
+          delete-branch: true
