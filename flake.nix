@@ -1,14 +1,5 @@
 {
-  description = "Nix-native pi.dev packages with free Garnix caching";
-
-  nixConfig = {
-    extra-substituters = [
-      "https://cache.garnix.io"
-    ];
-    extra-trusted-public-keys = [
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
-    ];
-  };
+  description = "Nix-native pi.dev packages — sourced from npm, no binary cache needed";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
