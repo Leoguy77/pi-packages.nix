@@ -1,12 +1,13 @@
 {
-  description = "Nix-native pi.dev packages with free Garnix caching";
+  description = "Nix-native pi.dev packages — cached on Cachix (free OSS tier)";
 
   nixConfig = {
     extra-substituters = [
-      "https://cache.garnix.io"
+      "https://pi-packages-nix.cachix.org"
     ];
+    # After creating the cache on Cachix, replace this key with yours:
     extra-trusted-public-keys = [
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
+      "pi-packages-nix.cachix.org-1:<your-key>"
     ];
   };
 
