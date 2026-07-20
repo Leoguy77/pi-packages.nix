@@ -11,27 +11,32 @@
       
       forAllSystems = nixpkgs.lib.genAttrs systems;
       
-      # Load registry
       registry = builtins.fromJSON (builtins.readFile ./registry/registry.json);
       
-      # Import mkPiPackage helper
       mkPiPackage = import ./lib/mkPiPackage.nix;
+      
+      packagesDir = ./packages;
+      
+      # Build a single package given pkgs and a registry entry
+      buildOne = pkgs: name: entry:
+        nixpkgs.lib.nameValuePair "pi-${name}"
+          ((mkPiPackage { inherit pkgs; lib = nixpkgs.lib; }) (entry // { inherit packagesDir; }));
       
       # Build all packages for a system
       buildPackages = pkgs:
-        nixpkgs.lib.mapAttrs' (name: entry:
-          nixpkgs.lib.nameValuePair "pi-${name}" (mkPiPackage pkgs entry)
-        ) registry.packages;
+        nixpkgs.lib.mapAttrs' (name: buildOne pkgs name) registry.packages;
         
-      # Tier A only (no npm deps - fast builds)
       buildTierA = pkgs:
-        nixpkgs.lib.mapAttrs' (name: entry:
-          nixpkgs.lib.nameValuePair "pi-${name}" (mkPiPackage pkgs entry)
-        ) (nixpkgs.lib.filterAttrs (_: e: e.tier == "A") registry.packages);
+        nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
+          (nixpkgs.lib.filterAttrs (_: e: e.tier == "A") registry.packages);
+      
+      buildTierB = pkgs:
+        nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
+          (nixpkgs.lib.filterAttrs (_: e: e.tier == "B") registry.packages);
         
     in {
       lib = {
-        inherit mkPiPackage;
+        mkPiPackage = import ./lib/mkPiPackage.nix;
       };
       
       packages = forAllSystems (system:
@@ -44,6 +49,10 @@
           tierA = pkgs.symlinkJoin {
             name = "pi-packages-tierA";
             paths = builtins.attrValues (buildTierA pkgs);
+          };
+          tierB = pkgs.symlinkJoin {
+            name = "pi-packages-tierB";
+            paths = builtins.attrValues (buildTierB pkgs);
           };
         }
       );

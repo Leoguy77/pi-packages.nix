@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // generate.mjs - Crawl npm registry for pi-package keyword and generate registry.json
-//
-// Output: JSON with packages array containing name, version, tarball, hash, tier, etc.
-// Tier A = no dependencies (peerDeps only) → fast builds
-// Tier B = has dependencies → needs buildNpmPackage
+// Also generates package-lock.json for Tier B packages at packages/<key>/package-lock.json
+
+import { execSync } from 'child_process';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { join } from 'path';
 
 const SEARCH_URL = 'https://registry.npmjs.org/-/v1/search?text=keywords:pi-package&size=250';
+const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
+const TMP = '/tmp/pi-registry-gen';
 
 async function fetchJSON(url) {
   const res = await fetch(url);
@@ -25,23 +28,65 @@ async function getPackageMetadata(name) {
   const peerDeps = versionMeta.peerDependencies || {};
   const piManifest = versionMeta.pi || {};
   
-  // Tier A: no real dependencies (only peerDeps)
-  // Tier B: has dependencies that need npm install
   const tier = Object.keys(deps).length === 0 ? 'A' : 'B';
   
   return {
     name: versionMeta.name,
     version: latestVersion,
     tarball: versionMeta.dist.tarball,
-    hash: versionMeta.dist.integrity, // Already SRI format (sha512-...)
+    hash: versionMeta.dist.integrity,
     tier,
     piManifest,
     dependencies: deps,
     peerDependencies: peerDeps,
     keywords: versionMeta.keywords || [],
     description: versionMeta.description || '',
-    downloads: 0, // Will be populated from search results
+    downloads: 0,
   };
+}
+
+function generateLockfile(name, tarballUrl, key) {
+  const pkgDir = join(PACKAGES_DIR, key);
+  const lockPath = join(pkgDir, 'package-lock.json');
+  
+  // Skip if lockfile already exists
+  if (existsSync(lockPath)) {
+    console.error(`  Lockfile exists, skipping`);
+    return;
+  }
+  
+  const workDir = join(TMP, key);
+  
+  try {
+    execSync(`rm -rf ${workDir}`);
+    mkdirSync(workDir, { recursive: true });
+    
+    // Download tarball
+    execSync(`curl -sL '${tarballUrl}' -o ${workDir}/pkg.tgz`, { stdio: 'pipe' });
+    
+    // Extract
+    execSync(`tar -xzf ${workDir}/pkg.tgz --strip-components=1 -C ${workDir}/pkg`, { stdio: 'pipe' });
+    
+    // Generate lockfile
+    execSync(`cd ${workDir}/pkg && HOME=${workDir} npm install --package-lock-only --ignore-scripts --no-audit --no-fund --loglevel=error`, {
+      stdio: 'pipe',
+      timeout: 30000,
+    });
+    
+    // Copy lockfile to packages/<key>/
+    if (existsSync(join(workDir, 'pkg', 'package-lock.json'))) {
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(lockPath, readFileSync(join(workDir, 'pkg', 'package-lock.json')));
+      console.error(`  Generated lockfile (${Math.round(readFileSync(lockPath).length / 1024)}KB)`);
+    } else {
+      console.error(`  No lockfile generated`);
+    }
+    
+  } catch (err) {
+    console.error(`  Lockfile generation failed: ${err.message}`);
+  } finally {
+    execSync(`rm -rf ${workDir}`);
+  }
 }
 
 async function main() {
@@ -61,17 +106,25 @@ async function main() {
       const meta = await getPackageMetadata(pkgName);
       if (!meta) continue;
       
-      // Use sanitized name as key (no @ or /)
       const key = pkgName.replace(/@/g, '').replace(/\//g, '-');
       packages[key] = meta;
+      
+      // Generate lockfile for Tier B packages
+      if (meta.tier === 'B') {
+        generateLockfile(pkgName, meta.tarball, key);
+      }
       
     } catch (err) {
       console.error(`  Error: ${err.message}`);
     }
   }
   
-  // Output JSON
-  console.log(JSON.stringify({ packages }, null, 2));
+  // Output registry.json
+  writeFileSync(
+    new URL('../registry/registry.json', import.meta.url).pathname,
+    JSON.stringify({ packages }, null, 2)
+  );
+  
   console.error(`\nGenerated ${Object.keys(packages).length} package entries`);
   console.error(`Tier A: ${Object.values(packages).filter(p => p.tier === 'A').length}`);
   console.error(`Tier B: ${Object.values(packages).filter(p => p.tier === 'B').length}`);
