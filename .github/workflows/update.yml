@@ -39,6 +39,8 @@ jobs:
         env:
           LOCKS_ONLY: '1'
           CONCURRENCY: '4'
+      - name: Update README stats
+        run: node scripts/update-readme-stats.mjs
       - name: Clean broken lockfiles
         run: |
           node -e "
@@ -55,7 +57,7 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if ! git diff --quiet -- registry/ packages/; then
+          if ! git diff --quiet -- registry/ packages/ README.md; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
       - name: Push changes to main
