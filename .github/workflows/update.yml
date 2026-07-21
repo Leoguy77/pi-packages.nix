@@ -59,10 +59,21 @@ jobs:
           fi
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: 'chore: update package registry and lockfiles'
-          title: 'chore: update registry and lockfiles'
-          body: Automated update from nightly cron.
-          branch: bot/update-registry
-          delete-branch: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore: update registry and lockfiles'
+          git push origin HEAD:bot/update-registry --force
+          PR=$(gh pr list --head bot/update-registry --json number --jq '.[0].number' 2>/dev/null || echo '')
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title 'chore: update registry and lockfiles' --body 'Automated update from nightly cron.'
+          else
+            gh pr create \
+              --title 'chore: update registry and lockfiles' \
+              --body 'Automated update from nightly cron.' \
+              --head bot/update-registry \
+              --base main
+          fi
