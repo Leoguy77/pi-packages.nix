@@ -1,13 +1,13 @@
 name: Check & Update Registry
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   schedule:
     - cron: '0 2 * * *'
-  workflow_dispatch: {}
 
 jobs:
   check:
@@ -41,20 +41,17 @@ jobs:
           LOCKS_ONLY: '1'
           CONCURRENCY: '4'
       
-      - name: Regenerate broken lockfiles
+      - name: Clean broken lockfiles
         run: node -e "
           const fs=require('fs'),p=require('path');
           const base='packages';
-          const dirs=fs.readdirSync(base).filter(d=>d!=='.gitkeep');
-          let fixed=0;
-          for(const d of dirs){
+          fs.readdirSync(base).filter(d=>d!=='.gitkeep').forEach(d=>{
             const lp=p.join(base,d,'package-lock.json');
-            if(!fs.existsSync(lp)) continue;
+            if(!fs.existsSync(lp)) return;
             const l=JSON.parse(fs.readFileSync(lp,'utf8'));
             const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
-            if(m.length>0){fs.unlinkSync(lp);fixed++;}
-          }
-          console.log('Cleaned '+fixed+' broken lockfiles');
+            if(m.length>0){fs.unlinkSync(lp);}
+          });
         "
       
       - name: Check for changes
@@ -62,7 +59,6 @@ jobs:
         run: |
           if ! git diff --quiet -- registry/ packages/; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected"
           fi
       
       - name: Create Pull Request
@@ -72,15 +68,6 @@ jobs:
           commit-message: 'chore: update package registry and lockfiles'
           title: 'chore: update package registry and lockfiles'
           body: |
-            Automated update from nightly cron:
-            - Package metadata refreshed from npm
-            - New packages added to registry.json
-            - Lockfiles generated for new Tier B packages
-            - Broken lockfiles cleaned up
-
-            Stats:
-            - Tier A (zero deps): direct unpack
-            - Tier B with lockfile: buildNpmPackage (cached)
-            - Tier B fallback (no lockfile): inline npm install
+            Automated update from nightly cron.
           branch: bot/update-registry
           delete-branch: true
