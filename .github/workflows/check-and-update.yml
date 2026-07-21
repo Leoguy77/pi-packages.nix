@@ -1,5 +1,4 @@
-name: Update pi-packages.nix registry
-
+name: Check & Update Registry
 on:
   workflow_dispatch:
   push:
@@ -23,51 +22,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      
       - name: Update package metadata
         run: node registry/generate.mjs
         env:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
-      
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs
         env:
           LOCKS_ONLY: '1'
           CONCURRENCY: '4'
-      
       - name: Clean broken lockfiles
         run: node -e "
           const fs=require('fs'),p=require('path');
           const base='packages';
           fs.readdirSync(base).filter(d=>d!=='.gitkeep').forEach(d=>{
             const lp=p.join(base,d,'package-lock.json');
-            if(!fs.existsSync(lp)) return;
+            if(!fs.existsSync(lp))return;
             const l=JSON.parse(fs.readFileSync(lp,'utf8'));
             const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
-            if(m.length>0){fs.unlinkSync(lp);}
+            if(m.length>0)fs.unlinkSync(lp);
           });
         "
-      
       - name: Check for changes
         id: changes
         run: |
           if ! git diff --quiet -- registry/ packages/; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-      
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: 'chore: update package registry and lockfiles'
-          title: 'chore: update package registry and lockfiles'
-          body: |
-            Automated update from nightly cron.
+          title: 'chore: update registry and lockfiles'
+          body: Automated update from nightly cron.
           branch: bot/update-registry
           delete-branch: true
