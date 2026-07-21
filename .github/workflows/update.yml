@@ -1,4 +1,4 @@
-name: Check & Update Registry
+name: Update pi-packages.nix registry
 on:
   workflow_dispatch:
   push:
@@ -36,17 +36,18 @@ jobs:
           LOCKS_ONLY: '1'
           CONCURRENCY: '4'
       - name: Clean broken lockfiles
-        run: node -e "
-          const fs=require('fs'),p=require('path');
-          const base='packages';
-          fs.readdirSync(base).filter(d=>d!=='.gitkeep').forEach(d=>{
-            const lp=p.join(base,d,'package-lock.json');
-            if(!fs.existsSync(lp))return;
-            const l=JSON.parse(fs.readFileSync(lp,'utf8'));
-            const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
-            if(m.length>0)fs.unlinkSync(lp);
-          });
-        "
+        run: |
+          node -e "
+            const fs=require('fs'),p=require('path');
+            const base='packages';
+            fs.readdirSync(base).filter(d=>d!=='.gitkeep').forEach(d=>{
+              const lp=p.join(base,d,'package-lock.json');
+              if(!fs.existsSync(lp))return;
+              const l=JSON.parse(fs.readFileSync(lp,'utf8'));
+              const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
+              if(m.length>0)fs.unlinkSync(lp);
+            });
+          "
       - name: Check for changes
         id: changes
         run: |
