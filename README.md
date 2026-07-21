@@ -101,6 +101,18 @@ settings.packages = [ "/nix/store/...-pi-pkg-foo" ]
 pi loads directly from store (no npm install)
 ```
 
+## Stats
+
+| Metric | Count |
+|--------|-------|
+| Total packages | 5,311 |
+| Tier A (zero deps, direct unpack) | 3,461 |
+| Tier B (has npm deps) | 1,850 |
+| With lockfile (`buildNpmPackage`, cached) | 1,815 |
+| Fallback (`stdenv.mkDerivation`, needs network) | 35 |
+
+Broken lockfile cleanup removes entries with unfixable integrity (git deps, yanked packages, private scoped packages). The 35 fallback packages have genuinely unresolvable npm dep trees.
+
 ## Phase 0 Validation
 
 Tested that pi loads local-path packages **without** running `npm install`:

@@ -90,6 +90,7 @@ async function runNpmLock(workDir) {
     const c1 = spawn('npm', [
       'install', '--package-lock-only', '--ignore-scripts',
       '--no-audit', '--no-fund', '--legacy-peer-deps',
+      '--engine-strict=false', '--ignore-platform',
       '--loglevel=error', `--cache=${NPM_CACHE}`
     ], { cwd: join(workDir, 'pkg'), env: { ...process.env, HOME: workDir }, stdio: 'pipe' });
     const t1 = setTimeout(() => { c1.kill(); reject(new Error('timeout-step1')); }, 120000);
@@ -102,7 +103,8 @@ async function runNpmLock(workDir) {
     const c2 = spawn('npm', [
       'install', '--ignore-scripts',
       '--no-audit', '--no-fund', '--legacy-peer-deps',
-      '--prefer-offline', '--loglevel=error', `--cache=${NPM_CACHE}`
+      '--engine-strict=false', '--ignore-platform',
+      '--loglevel=error', `--cache=${NPM_CACHE}`
     ], { cwd: join(workDir, 'pkg'), env: { ...process.env, HOME: workDir }, stdio: 'pipe' });
     const t2 = setTimeout(() => { c2.kill(); reject(new Error('timeout-step2')); }, 180000);
     c2.on('exit', (c) => {
@@ -127,6 +129,31 @@ async function generateLockfile(name, tarballUrl, key) {
     execSync(`rm -rf ${workDir} ; mkdir -p ${workDir}/pkg`, { stdio: 'pipe', timeout: 10000 });
     execSync(`curl -sL --max-time 30 '${tarballUrl}' -o ${workDir}/pkg.tgz`, { stdio: 'pipe', timeout: 35000 });
     execSync(`tar -xzf ${workDir}/pkg.tgz --strip-components=1 -C ${workDir}/pkg`, { stdio: 'pipe', timeout: 10000 });
+    // Strip workspace:* deps — unresolvable by standalone npm
+    const pjPath = join(workDir, 'pkg', 'package.json');
+    if (existsSync(pjPath)) {
+      const pj = JSON.parse(readFileSync(pjPath, 'utf8'));
+      const wsDeps = (deps) => deps ? Object.entries(deps).filter(([, v]) => typeof v === 'string' && v.startsWith('workspace:')) : [];
+      const toRemove = [...wsDeps(pj.dependencies), ...wsDeps(pj.devDependencies), ...wsDeps(pj.peerDependencies)];
+      if (toRemove.length) {
+        for (const [n] of toRemove) {
+          if (pj.dependencies?.[n]) delete pj.dependencies[n];
+          if (pj.devDependencies?.[n]) delete pj.devDependencies[n];
+          if (pj.peerDependencies?.[n]) delete pj.peerDependencies[n];
+        }
+      }
+      // Strip devEngines — npm's --engine-strict=false doesn't handle pnpm packageManager
+      if (pj.devEngines) {
+        delete pj.devEngines;
+      }
+      // Remove devDependencies — not needed for production lockfiles, often cause E404 for private packages
+      if (pj.devDependencies) {
+        delete pj.devDependencies;
+      }
+      if (toRemove.length || JSON.stringify(pj) !== readFileSync(pjPath, 'utf8')) {
+        writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
+      }
+    }
     await runNpmLock(workDir);
     if (existsSync(join(workDir, 'pkg', 'package-lock.json'))) {
       mkdirSync(pkgDir, { recursive: true });
