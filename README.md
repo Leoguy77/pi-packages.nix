@@ -65,14 +65,14 @@ home-manager switch --flake .
 
 ## Available Packages
 
-**5,252 packages** from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package) (3,419 Tier A + 1,833 Tier B).
+**5,311 packages** from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package) (3,461 Tier A + 1,850 Tier B).
 
 See [`registry/registry.json`](./registry/registry.json) for the full list.
 
 **Tiers:**
-- **Tier A** (3,419) — No npm dependencies (peerDeps only) → instant unpack from tarball
-- **Tier B with lockfile** (1,663) — Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached)
-- **Tier B fallback** (170) — Has dependencies but no valid lockfile, builds via inline `npm install` (needs network, `--option sandbox false`)
+- **Tier A** (3,461) — No npm dependencies (peerDeps only) → instant unpack from tarball
+- **Tier B with lockfile** (1,815) — Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached)
+- **Tier B fallback** (35) — Has dependencies but no valid lockfile (broken npm dep trees, private packages, git deps), builds via inline `npm install` (needs `--option sandbox false`)
 
 ## How It Works
 
@@ -152,14 +152,18 @@ nix build .#packages.x86_64-linux.tierB
 
 Registry + lockfiles update nightly via GitHub Actions:
 
-1. **`check` job** (every push/PR/schedule) — runs `nix flake check`
-2. **`update-registry` job** (nightly cron + manual trigger) — step by step:
-   - Download latest package metadata from npm → `registry.json`
+1. **`check` job** (every push/PR) — runs `nix flake check`
+2. **`update-registry` job** (nightly cron + manual trigger):
+   - Update package metadata from npm → `registry.json`
    - Generate lockfiles for new Tier B packages → `packages/<name>/package-lock.json`
-   - Clean up lockfiles with broken integrity
-   - Create PR with changes
+   - Fix missing integrity hashes via registry API
+   - Delete broken lockfiles (git deps, private packages)
+   - Push changes directly to `main` (no PR — automated metadata needs no review)
 
-Trigger manually: `gh workflow run -R Leoguy77/pi-packages.nix "Check & Update Registry"`
+Trigger manually:
+```bash
+gh workflow run -R Leoguy77/pi-packages.nix update.yml --ref main
+```
 
 ## License
 
