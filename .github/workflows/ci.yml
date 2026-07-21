@@ -23,26 +23,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       
-      - name: Generate registry + lockfiles
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      
+      - name: Update package metadata
         run: node registry/generate.mjs
         env:
-          NODE_OPTIONS: "--no-warnings"
+          REGISTRY_ONLY: '1'
+          CONCURRENCY: '4'
       
-      - name: Discover Tier B dependency hashes (TOFU)
-        run: |
-          bash scripts/build-all.sh --parallel 2 || true
+      - name: Generate lockfiles for new Tier B packages
+        run: node registry/generate.mjs
         env:
-          NIX_OPTIONS: "--option sandbox false"
+          LOCKS_ONLY: '1'
+          CONCURRENCY: '4'
+      
+      - name: Regenerate broken lockfiles
+        run: node -e "
+          const fs=require('fs'),p=require('path');
+          const base='packages';
+          const dirs=fs.readdirSync(base).filter(d=>d!=='.gitkeep');
+          let fixed=0;
+          for(const d of dirs){
+            const lp=p.join(base,d,'package-lock.json');
+            if(!fs.existsSync(lp)) continue;
+            const l=JSON.parse(fs.readFileSync(lp,'utf8'));
+            const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
+            if(m.length>0){fs.unlinkSync(lp);fixed++;}
+          }
+          console.log('Cleaned '+fixed+' broken lockfiles');
+        "
       
       - name: Check for changes
         id: changes
         run: |
           if ! git diff --quiet -- registry/ packages/; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in registry and/or lockfiles"
+            echo "Changes detected"
           fi
       
       - name: Create Pull Request
@@ -52,10 +72,15 @@ jobs:
           commit-message: 'chore: update package registry and lockfiles'
           title: 'chore: update package registry and lockfiles'
           body: |
-            Automated update:
-            - Package versions bumped
-            - New packages added
-            - Lockfiles generated for Tier B packages
-            - npmDepsHash values discovered via TOFU builds
+            Automated update from nightly cron:
+            - Package metadata refreshed from npm
+            - New packages added to registry.json
+            - Lockfiles generated for new Tier B packages
+            - Broken lockfiles cleaned up
+
+            Stats:
+            - Tier A (zero deps): direct unpack
+            - Tier B with lockfile: buildNpmPackage (cached)
+            - Tier B fallback (no lockfile): inline npm install
           branch: bot/update-registry
           delete-branch: true

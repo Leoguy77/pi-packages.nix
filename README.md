@@ -65,22 +65,25 @@ home-manager switch --flake .
 
 ## Available Packages
 
+**5,252 packages** from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package) (3,419 Tier A + 1,833 Tier B).
+
 See [`registry/registry.json`](./registry/registry.json) for the full list.
 
-| Package | Description | Tier |
-|---------|-------------|------|
-| `pi-rewind` | Conversation history navigation | A |
-
 **Tiers:**
-- **Tier A** - No npm dependencies (peerDeps only) → instant builds, always cached
-- **Tier B** - Has npm dependencies → built on demand
+- **Tier A** (3,419) — No npm dependencies (peerDeps only) → instant unpack from tarball
+- **Tier B with lockfile** (1,663) — Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached)
+- **Tier B fallback** (170) — Has dependencies but no valid lockfile, builds via inline `npm install` (needs network, `--option sandbox false`)
 
 ## How It Works
 
-1. **Registry generation** - `registry/generate.mjs` crawls npm for `keywords:pi-package`, extracting tarball URLs and SRI hashes
-2. **Package building** - `lib.mkPiPackage` fetches and unpacks (Tier A) or builds with `buildNpmPackage` (Tier B)
-3. **Module integration** - NixOS/HM modules resolve package names to store paths and write to `settings.packages`
-4. **No binary cache needed** — all derivations are fixed-output (fetchurl + integrity hash). Tier A is instant, Tier B builds once per `npmDepsHash` per machine.
+1. **Registry generation** — `registry/generate.mjs` crawls npm for `keywords:pi-package`, extracting tarball URLs and SRI hashes. Runs nightly via CI cron.
+2. **Lockfile generation** — For Tier B packages, lockfiles are pre-generated with 2-step npm install (metadata → full install for integrity → delete `node_modules`). Stored in `packages/<name>/package-lock.json`.
+3. **Package building** — `lib.mkPiPackage`:
+   - Tier A: `fetchurl` + `tar` (fixed-output, instant)
+   - Tier B with lockfile: `buildNpmPackage` with lockfile merged into `src` (cached via `npmDepsHash`)
+   - Tier B fallback: `stdenv.mkDerivation` + inline `npm install` (uncached, needs `--option sandbox false`)
+4. **Module integration** — NixOS/HM modules resolve package names to store paths and write to `settings.packages`
+5. **No binary cache needed** — Tier A is always cached (fixed-output). Tier B lockfile packages build once per `npmDepsHash` per machine.
 
 ## Architecture
 
@@ -114,26 +117,37 @@ I'm ready to help! What would you like me to work on?
 
 ✅ Confirmed: Tier A packages load instantly with zero dependencies.
 
-## Roadmap
-
-- [x] Phase 0: Validate purity assumption (local-path loading)
-- [x] Phase 1: Basic flake structure + Tier A support
-- [ ] Phase 2: Tier B support (buildNpmPackage + importNpmLock)
-- [ ] Phase 3: Full registry (all ~4,893 packages)
-- [ ] Phase 4: Publish
-
 ## Development
 
 ```bash
-# Test registry generation
-node registry/generate.mjs
+# Test registry generation (metadata only, fast)
+REGISTRY_ONLY=1 node registry/generate.mjs
+
+# Generate lockfiles for Tier B packages
+LOCKS_ONLY=1 node registry/generate.mjs
 
 # Build a specific package
 nix build .#packages.x86_64-linux.pi-pi-rewind
 
 # Build all Tier A packages
 nix build .#packages.x86_64-linux.tierA
+
+# Build all Tier B packages with lockfiles
+nix build .#packages.x86_64-linux.tierB
 ```
+
+## Automatic Updates
+
+Registry + lockfiles update nightly via GitHub Actions:
+
+1. **`check` job** (every push/PR/schedule) — runs `nix flake check`
+2. **`update-registry` job** (nightly cron + manual trigger) — step by step:
+   - Download latest package metadata from npm → `registry.json`
+   - Generate lockfiles for new Tier B packages → `packages/<name>/package-lock.json`
+   - Clean up lockfiles with broken integrity
+   - Create PR with changes
+
+Trigger manually: `gh workflow run -R Leoguy77/pi-packages.nix "Check & Update Registry"`
 
 ## License
 
