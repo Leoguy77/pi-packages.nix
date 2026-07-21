@@ -113,22 +113,6 @@ pi loads directly from store (no npm install)
 
 Broken lockfile cleanup removes entries with unfixable integrity (git deps, yanked packages, private scoped packages). The 35 fallback packages have genuinely unresolvable npm dep trees.
 
-## Phase 0 Validation
-
-Tested that pi loads local-path packages **without** running `npm install`:
-
-```bash
-$ env PI_PROJECT_TRUSTED=1 pi list
-Project packages:
-  /nix/store/...-pi-pkg-rewind
-    /nix/store/...-pi-pkg-rewind
-
-$ env PI_PROJECT_TRUSTED=1 pi "test"
-I'm ready to help! What would you like me to work on?
-```
-
-✅ Confirmed: Tier A packages load instantly with zero dependencies.
-
 ## Development
 
 ```bash
