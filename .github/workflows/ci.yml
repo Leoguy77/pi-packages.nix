@@ -23,22 +23,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate registry
-        run: node registry/generate.mjs > registry/registry.json.new
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      
+      - name: Generate registry + lockfiles
+        run: node registry/generate.mjs
+        env:
+          NODE_OPTIONS: "--no-warnings"
+      
+      - name: Discover Tier B dependency hashes (TOFU)
+        run: |
+          bash scripts/build-all.sh --parallel 2 || true
+        env:
+          NIX_OPTIONS: "--option sandbox false"
+      
       - name: Check for changes
         id: changes
         run: |
-          if ! diff -q registry/registry.json registry/registry.json.new &>/dev/null; then
-            mv registry/registry.json.new registry/registry.json
+          if ! git diff --quiet -- registry/ packages/; then
             echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in registry and/or lockfiles"
           fi
+      
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: 'chore: update package registry'
-          title: 'chore: update package registry'
+          commit-message: 'chore: update package registry and lockfiles'
+          title: 'chore: update package registry and lockfiles'
           body: |
-            Automated registry update from npm.
+            Automated update:
+            - Package versions bumped
+            - New packages added
+            - Lockfiles generated for Tier B packages
+            - npmDepsHash values discovered via TOFU builds
           branch: bot/update-registry
           delete-branch: true

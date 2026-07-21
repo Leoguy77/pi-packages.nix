@@ -42,7 +42,9 @@ else
       cp ${lockPath} $out/package-lock.json
     '' else tarballSrc;
     
-  in pkgs.buildNpmPackage {
+  # Has valid lockfile → buildNpmPackage (cached via npmDepsHash)
+  # No lockfile → stdenv.mkDerivation with inline npm install (uncached)
+  in if hasLock then pkgs.buildNpmPackage {
     pname = "pi-pkg-${name}";
     inherit version src;
     
@@ -50,12 +52,35 @@ else
       else "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     
     dontNpmBuild = true;
-    npmInstallFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
+    npmInstallFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" "--legacy-peer-deps" ];
     makeCacheWritable = true;
     
     installPhase = ''
       mkdir -p $out
       cp -r . $out/
       rm -rf $out/node_modules/.cache 2>/dev/null || true
+    '';
+  } else pkgs.stdenv.mkDerivation {
+    pname = "pi-pkg-${name}";
+    inherit version;
+    src = tarballSrc;
+    phases = [ "unpackPhase" "buildPhase" "installPhase" ];
+    nativeBuildInputs = [ pkgs.gnutar pkgs.nodejs ];
+    
+    HOME = "/tmp";  # npm needs writable HOME
+    
+    # ponytail: inline npm install for packages without lockfile.
+    # Requires network access — use --option sandbox false or CI with
+    # magic-nix-cache-action (which disables sandbox).
+    # 1663/1833 Tier B packages have valid lockfiles and use buildNpmPackage.
+    buildPhase = ''
+      tar -xzf $src --strip-components=1
+      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error
+      rm -rf node_modules/.cache 2>/dev/null || true
+    '';
+    
+    installPhase = ''
+      mkdir -p $out
+      cp -r . $out/
     '';
   }
