@@ -57,23 +57,11 @@ jobs:
           if ! git diff --quiet -- registry/ packages/; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-      - name: Create Pull Request
+      - name: Push changes to main
         if: steps.changes.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'chore: update registry and lockfiles'
-          git push origin HEAD:bot/update-registry --force
-          PR=$(gh pr list --head bot/update-registry --json number --jq '.[0].number' 2>/dev/null || echo '')
-          if [ -n "$PR" ]; then
-            gh pr edit "$PR" --title 'chore: update registry and lockfiles' --body 'Automated update from nightly cron.'
-          else
-            gh pr create \
-              --title 'chore: update registry and lockfiles' \
-              --body 'Automated update from nightly cron.' \
-              --head bot/update-registry \
-              --base main
-          fi
+          git push origin HEAD:main
