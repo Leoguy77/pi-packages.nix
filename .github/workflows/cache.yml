@@ -1,0 +1,109 @@
+name: Build and push to Attic cache
+on:
+  workflow_run:
+    workflows: ["Update pi-packages.nix registry"]
+    types:
+      - completed
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'registry/registry.json'
+      - 'packages/**/package-lock.json'
+
+concurrency:
+  group: attic-push
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Enable Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Configure Nix for builds
+        run: |
+          mkdir -p ~/.config/nix
+          cat >> ~/.config/nix/nix.conf << 'EOF'
+          experimental-features = nix-command flakes
+          max-jobs = 4
+          cores = 0
+          sandbox = false
+          EOF
+
+      - name: Login to Attic cache
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+        run: |
+          attic login ci https://nix-cache.lsinfra.de "$TOKEN" --set-default
+      # Also configure Nix to use Attic as a binary cache source
+      - name: Configure Nix substituter
+        run: |
+          cat >> ~/.config/nix/nix.conf << 'EOF'
+          extra-substituters = https://nix-cache.lsinfra.de/pi-packages
+          extra-trusted-public-keys = pi-packages:OF+SNU2ALJB8M+cQP/RfFOuKIOMN0w4WiV8k01pvUC4=
+          EOF
+
+      - name: Get list of buildable packages
+        id: packages
+        run: |
+          node -e "
+            const r = require('./registry/registry.json');
+            const names = Object.entries(r.packages)
+              .filter(([k, v]) => (v.tier === 'B' || v.tier === 'C')
+                && !!v.npmDepsHash && v.npmDepsHash.startsWith('sha256-'))
+              .map(([k]) => k);
+            const safe = n => n.replace(/\./g, '_');
+            const attrs = names.map(k => '.#pi-' + safe(k));
+            console.log('Package count: ' + names.length);
+            require('fs').writeFileSync('attrs.txt', attrs.join('\\n'), 'utf8');
+          "
+          echo "count=$(wc -l < attrs.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Build all packages
+        run: |
+          xargs -a attrs.txt nix build --no-link --keep-going 2>&1 || true
+        timeout-minutes: 60
+
+      - name: Push to Attic cache
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+        run: |
+          # After batch build, push each successfully built store path
+          node -e "
+            const { spawnSync } = require('child_process');
+            const { readFileSync } = require('fs');
+            const reg = JSON.parse(readFileSync('registry/registry.json', 'utf8'));
+            const names = Object.entries(reg.packages)
+              .filter(([k, v]) => (v.tier === 'B' || v.tier === 'C')
+                && !!v.npmDepsHash && v.npmDepsHash.startsWith('sha256-'))
+              .map(([k]) => k);
+            const safe = n => n.replace(/\./g, '_');
+            let built = 0, pushed = 0;
+            for (const k of names) {
+              const out = spawnSync('nix', ['build', '--no-link', '--print-out-paths', '.#pi-' + safe(k)], { timeout: 5000 });
+              if (out.status !== 0) continue;
+              const p = out.stdout.toString().trim();
+              if (!p.startsWith('/nix/store/')) continue;
+              built++;
+              const push = spawnSync('attic', ['push', 'pi-packages', p, '--token', process.env.TOKEN], { timeout: 120000 });
+              if (push.status === 0) pushed++;
+            }
+            console.log('Built: ' + built + ' Pushed: ' + pushed);
+          "
+        timeout-minutes: 60
+
+      - name: Summary
+        run: |
+          echo "## Attic Cache Push Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "Trigger: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Packages: ${{ steps.packages.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
