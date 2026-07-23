@@ -54,9 +54,12 @@ else
     dontNpmBuild = true;
     npmInstallFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" "--legacy-peer-deps" ];
     makeCacheWritable = true;
-    # Unset SSL_CERT_FILE so Node.js uses its embedded CA store
-    # (stdenv sets it to /no-cert-file.crt which breaks all TLS)
-    SSL_CERT_FILE = "";
+    preBuild = ''
+      # stdenv sets SSL_CERT_FILE=/no-cert-file.crt which breaks all TLS.
+      # Unset so Node.js uses its embedded CA store.
+      unset SSL_CERT_FILE
+      unset NIX_SSL_CERT_FILE
+    '';
     
     installPhase = ''
       mkdir -p $out
@@ -76,9 +79,15 @@ else
     # Requires network access — use --option sandbox false or CI with
     # magic-nix-cache-action (which disables sandbox).
     # 1663/1833 Tier B packages have valid lockfiles and use buildNpmPackage.
+    # stdenv sets SSL_CERT_FILE=/no-cert-file.crt which breaks all TLS
+    preBuild = ''
+      unset SSL_CERT_FILE
+      unset NIX_SSL_CERT_FILE
+    '';
+
     buildPhase = ''
       tar -xzf $src --strip-components=1
-      HOME=$TMPDIR SSL_CERT_FILE= npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error
+      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error
       rm -rf node_modules/.cache 2>/dev/null || true
     '';
     
