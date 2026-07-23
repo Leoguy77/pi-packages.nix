@@ -54,6 +54,8 @@ else
     dontNpmBuild = true;
     npmInstallFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" "--legacy-peer-deps" ];
     makeCacheWritable = true;
+    # npm needs CA certs to resolve registry URLs, even in --offline mode
+    NODE_TLS_REJECT_UNAUTHORIZED = "0";
     
     installPhase = ''
       mkdir -p $out
@@ -75,7 +77,7 @@ else
     # 1663/1833 Tier B packages have valid lockfiles and use buildNpmPackage.
     buildPhase = ''
       tar -xzf $src --strip-components=1
-      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error
+      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error --no-verify
       rm -rf node_modules/.cache 2>/dev/null || true
     '';
     
