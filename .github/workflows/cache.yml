@@ -38,7 +38,7 @@ jobs:
       - name: Install attic CLI
         run: nix profile install nixpkgs#attic-client
 
-      - name: Configure Nix for builds
+      - name: Configure Nix with Attic substituter
         run: |
           mkdir -p ~/.config/nix
           cat > ~/.config/nix/nix.conf << NIXCONF
@@ -55,60 +55,35 @@ jobs:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
 
-      - name: Check which packages need building
-        id: check
+      - name: Build all packages (skips cached via Attic substituter)
         run: |
-          node -e "
-            const {readFileSync,writeFileSync}=require('fs');
-            const {spawnSync}=require('child_process');
-            const reg=JSON.parse(readFileSync('registry/registry.json','utf8'));
-            const all=Object.entries(reg.packages)
-              .filter(([k,v])=>(v.tier==='B'||v.tier==='C')&&v.npmDepsHash?.startsWith('sha256-'))
-              .map(([k])=>k);
-            const safe=n=>n.replace(/\./g,'_');
-            let built=0,missing=[];
-            for(const k of all){
-              const r=spawnSync('nix',['build','--no-link','--print-out-paths','.#pi-'+safe(k)],{timeout:3000});
-              if(r.status!==0){missing.push(k);continue;}
-              built++;
-            }
-            writeFileSync('attrs.txt',missing.map(k=>'.#pi-'+safe(k)).join('\n'),'utf8');
-            console.log('built='+built+' missing='+missing.length);
-          "
-          echo "missing=$(wc -l < attrs.txt)" >> "$GITHUB_OUTPUT"
-
-      - name: Build missing packages
-        if: steps.check.outputs.missing > 0
-        run: |
-          xargs -a attrs.txt nix build --no-link --keep-going || true
+          nix build .#all --no-link --keep-going || true
         timeout-minutes: 60
 
-      - name: Push to Attic
-        if: steps.check.outputs.missing > 0
+      - name: Push new store paths to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
-          node -e "
-            const {spawnSync}=require('child_process');
-            const {readFileSync,existsSync}=require('fs');
-            if(!existsSync('attrs.txt')){console.log('nothing to push');process.exit(0);}
-            const attrs=readFileSync('attrs.txt','utf8').trim().split('\n').filter(Boolean);
-            const token=process.env.TOKEN;
-            let p=0;
-            for(const attr of attrs){
-              const r=spawnSync('nix',['build','--no-link','--print-out-paths',attr],{timeout:5000});
-              if(r.status!==0)continue;
-              const path=r.stdout.toString().trim();
-              if(!path.startsWith('/nix/store/'))continue;
-              const push=spawnSync('attic',['push',process.env.ATTIC_CACHE,path,'--token',token],{timeout:120000});
-              if(push.status===0)p++;
-            }
-            console.log('pushed='+p);
-          "
+          # Get all output paths in one eval, then push each
+          nix eval --json '.#packages.x86_64-linux' --apply 'x: builtins.attrValues (builtins.mapAttrs (n: v: v.outPath) x)' 2>/dev/null |
+            node -e "
+              const {spawnSync}=require('child_process');
+              let d='';
+              process.stdin.on('data',c=>d+=c);
+              process.stdin.on('end',()=>{
+                const paths=JSON.parse(d).filter(p=>p.startsWith('/nix/store/'));
+                console.log('Store paths: '+paths.length);
+                let p=0;
+                for(const path of paths){
+                  const push=spawnSync('attic',['push',process.env.ATTIC_CACHE,path,'--token',process.env.TOKEN],{timeout:120000});
+                  if(push.status===0)p++;
+                }
+                console.log('pushed='+p);
+              });
+            "
         timeout-minutes: 60
 
       - name: Summary
         run: |
           echo "## Attic Cache Push Results" >> "$GITHUB_STEP_SUMMARY"
           echo "Trigger: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "New packages pushed: ${{ steps.check.outputs.missing }}" >> "$GITHUB_STEP_SUMMARY"
