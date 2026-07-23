@@ -36,7 +36,7 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Install attic CLI
-        run: nix profile install nixpkgs#attic
+        run: nix profile install nixpkgs#attic-client
 
       - name: Configure Nix for builds
         run: |
