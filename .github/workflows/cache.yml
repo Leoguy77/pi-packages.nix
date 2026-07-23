@@ -17,6 +17,11 @@ concurrency:
   group: attic-push
   cancel-in-progress: false
 
+env:
+  ATTIC_ENDPOINT: https://nix-cache.lsinfra.de
+  ATTIC_CACHE: pi-packages
+  ATTIC_PUBLIC_KEY: pi-packages:OF+SNU2ALJB8M+cQP/RfFOuKIOMN0w4WiV8k01pvUC4=
+
 jobs:
   build-and-push:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
@@ -30,75 +35,75 @@ jobs:
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - name: Install attic CLI
+        run: nix profile install nixpkgs#attic
+
       - name: Configure Nix for builds
         run: |
           mkdir -p ~/.config/nix
-          cat >> ~/.config/nix/nix.conf << 'EOF'
+          cat > ~/.config/nix/nix.conf << NIXCONF
           experimental-features = nix-command flakes
           max-jobs = 4
           cores = 0
           sandbox = false
-          EOF
+          extra-substituters = ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
+          extra-trusted-public-keys = ${{ env.ATTIC_PUBLIC_KEY }}
+          NIXCONF
 
-      - name: Login to Attic cache
+      - name: Login to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
-        run: |
-          attic login ci https://nix-cache.lsinfra.de "$TOKEN" --set-default
-      # Also configure Nix to use Attic as a binary cache source
-      - name: Configure Nix substituter
-        run: |
-          cat >> ~/.config/nix/nix.conf << 'EOF'
-          extra-substituters = https://nix-cache.lsinfra.de/pi-packages
-          extra-trusted-public-keys = pi-packages:OF+SNU2ALJB8M+cQP/RfFOuKIOMN0w4WiV8k01pvUC4=
-          EOF
+        run: attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
 
-      - name: Get list of buildable packages
-        id: packages
+      - name: Check which packages need building
+        id: check
         run: |
           node -e "
-            const r = require('./registry/registry.json');
-            const names = Object.entries(r.packages)
-              .filter(([k, v]) => (v.tier === 'B' || v.tier === 'C')
-                && !!v.npmDepsHash && v.npmDepsHash.startsWith('sha256-'))
-              .map(([k]) => k);
-            const safe = n => n.replace(/\./g, '_');
-            const attrs = names.map(k => '.#pi-' + safe(k));
-            console.log('Package count: ' + names.length);
-            require('fs').writeFileSync('attrs.txt', attrs.join('\\n'), 'utf8');
+            const {readFileSync,writeFileSync}=require('fs');
+            const {spawnSync}=require('child_process');
+            const reg=JSON.parse(readFileSync('registry/registry.json','utf8'));
+            const all=Object.entries(reg.packages)
+              .filter(([k,v])=>(v.tier==='B'||v.tier==='C')&&v.npmDepsHash?.startsWith('sha256-'))
+              .map(([k])=>k);
+            const safe=n=>n.replace(/\./g,'_');
+            let built=0,missing=[];
+            for(const k of all){
+              const r=spawnSync('nix',['build','--no-link','--print-out-paths','.#pi-'+safe(k)],{timeout:3000});
+              if(r.status!==0){missing.push(k);continue;}
+              built++;
+            }
+            writeFileSync('attrs.txt',missing.map(k=>'.#pi-'+safe(k)).join('\n'),'utf8');
+            console.log('built='+built+' missing='+missing.length);
           "
-          echo "count=$(wc -l < attrs.txt)" >> "$GITHUB_OUTPUT"
+          echo "missing=$(wc -l < attrs.txt)" >> "$GITHUB_OUTPUT"
 
-      - name: Build all packages
+      - name: Build missing packages
+        if: steps.check.outputs.missing > 0
         run: |
-          xargs -a attrs.txt nix build --no-link --keep-going 2>&1 || true
+          xargs -a attrs.txt nix build --no-link --keep-going || true
         timeout-minutes: 60
 
-      - name: Push to Attic cache
+      - name: Push to Attic
+        if: steps.check.outputs.missing > 0
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
-          # After batch build, push each successfully built store path
           node -e "
-            const { spawnSync } = require('child_process');
-            const { readFileSync } = require('fs');
-            const reg = JSON.parse(readFileSync('registry/registry.json', 'utf8'));
-            const names = Object.entries(reg.packages)
-              .filter(([k, v]) => (v.tier === 'B' || v.tier === 'C')
-                && !!v.npmDepsHash && v.npmDepsHash.startsWith('sha256-'))
-              .map(([k]) => k);
-            const safe = n => n.replace(/\./g, '_');
-            let built = 0, pushed = 0;
-            for (const k of names) {
-              const out = spawnSync('nix', ['build', '--no-link', '--print-out-paths', '.#pi-' + safe(k)], { timeout: 5000 });
-              if (out.status !== 0) continue;
-              const p = out.stdout.toString().trim();
-              if (!p.startsWith('/nix/store/')) continue;
-              built++;
-              const push = spawnSync('attic', ['push', 'pi-packages', p, '--token', process.env.TOKEN], { timeout: 120000 });
-              if (push.status === 0) pushed++;
+            const {spawnSync}=require('child_process');
+            const {readFileSync,existsSync}=require('fs');
+            if(!existsSync('attrs.txt')){console.log('nothing to push');process.exit(0);}
+            const attrs=readFileSync('attrs.txt','utf8').trim().split('\n').filter(Boolean);
+            const token=process.env.TOKEN;
+            let p=0;
+            for(const attr of attrs){
+              const r=spawnSync('nix',['build','--no-link','--print-out-paths',attr],{timeout:5000});
+              if(r.status!==0)continue;
+              const path=r.stdout.toString().trim();
+              if(!path.startsWith('/nix/store/'))continue;
+              const push=spawnSync('attic',['push',process.env.ATTIC_CACHE,path,'--token',token],{timeout:120000});
+              if(push.status===0)p++;
             }
-            console.log('Built: ' + built + ' Pushed: ' + pushed);
+            console.log('pushed='+p);
           "
         timeout-minutes: 60
 
@@ -106,4 +111,4 @@ jobs:
         run: |
           echo "## Attic Cache Push Results" >> "$GITHUB_STEP_SUMMARY"
           echo "Trigger: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Packages: ${{ steps.packages.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "New packages pushed: ${{ steps.check.outputs.missing }}" >> "$GITHUB_STEP_SUMMARY"
