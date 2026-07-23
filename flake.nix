@@ -17,9 +17,12 @@
       
       packagesDir = ./packages;
       
+      # Sanitize registry names for Nix attribute paths (dots are path separators)
+      safeName = name: builtins.replaceStrings ["."] ["_"] name;
+
       # Build a single package given pkgs and a registry entry
       buildOne = pkgs: name: entry:
-        nixpkgs.lib.nameValuePair "pi-${name}"
+        nixpkgs.lib.nameValuePair "pi-${safeName name}"
           ((mkPiPackage { inherit pkgs; lib = nixpkgs.lib; }) (entry // { inherit packagesDir; }));
       
       # Build all packages for a system
