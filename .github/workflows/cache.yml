@@ -29,61 +29,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Nix
+      - name: Install Nix with Attic substituter
         uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            accept-flake-config = true
+            substituters = https://cache.nixos.org ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= ${{ env.ATTIC_PUBLIC_KEY }}
 
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Install attic CLI
-        run: nix profile install nixpkgs#attic-client
-
-      - name: Configure Nix with Attic substituter
+      - name: Build all packages
         run: |
-          mkdir -p ~/.config/nix
-          cat > ~/.config/nix/nix.conf << NIXCONF
-          experimental-features = nix-command flakes
-          max-jobs = 4
-          cores = 0
-          sandbox = false
-          extra-substituters = ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
-          extra-trusted-public-keys = ${{ env.ATTIC_PUBLIC_KEY }}
-          NIXCONF
-
-      - name: Login to Attic
-        env:
-          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
-        run: attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
-
-      - name: Build all packages (skips cached via Attic substituter)
-        run: |
-          nix build .#all --no-link --keep-going || true
+          nix build .#all --no-link --keep-going \
+            --option sandbox false \
+            --option max-jobs 4 || true
         timeout-minutes: 60
 
-      - name: Push new store paths to Attic
+      - name: Push closure to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
-          # Get all output paths in one eval, then push each
-          nix eval --json '.#packages.x86_64-linux' --apply 'x: builtins.attrValues (builtins.mapAttrs (n: v: v.outPath) x)' 2>/dev/null |
-            node -e "
-              const {spawnSync}=require('child_process');
-              let d='';
-              process.stdin.on('data',c=>d+=c);
-              process.stdin.on('end',()=>{
-                const paths=JSON.parse(d).filter(p=>p.startsWith('/nix/store/'));
-                console.log('Store paths: '+paths.length);
-                let p=0;
-                for(const path of paths){
-                  const push=spawnSync('attic',['push',process.env.ATTIC_CACHE,path,'--token',process.env.TOKEN],{timeout:120000});
-                  if(push.status===0)p++;
-                }
-                console.log('pushed='+p);
-              });
-            "
+          ALL_PATH=$(nix build .#all --no-link --print-out-paths 2>/dev/null)
+          echo "Pushing closure of: $ALL_PATH"
+          nix-store -qR "$ALL_PATH" | \
+            nix run nixpkgs#attic-client -- push \
+              "$ATTIC_CACHE" --stdin --token "$TOKEN"
         timeout-minutes: 60
-
-      - name: Summary
-        run: |
-          echo "## Attic Cache Push Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "Trigger: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
