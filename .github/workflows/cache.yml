@@ -36,8 +36,12 @@ jobs:
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build attic CLI
-        run: nix build nixpkgs#attic-client --out-link /tmp/attic
+      - name: Build attic CLI and login
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+        run: |
+          nix build nixpkgs#attic-client --out-link /tmp/attic
+          /tmp/attic/bin/attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
 
       - name: Build all packages
         run: |
@@ -47,12 +51,15 @@ jobs:
         timeout-minutes: 60
 
       - name: Push closure to Attic
-        env:
-          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
           ALL_PATH=$(nix build .#all --no-link --print-out-paths 2>/dev/null)
-          if [ -z "$ALL_PATH" ]; then echo "No all path"; exit 0; fi
-          echo "Pushing closure of: $ALL_PATH"
-          nix-store -qR "$ALL_PATH" | /tmp/attic/bin/attic push \
-            "$ATTIC_CACHE" --stdin --token "$TOKEN"
+          if [ -z "$ALL_PATH" ]; then
+            echo "ALL_PATH empty - trying direct eval"
+            nix eval .#packages.x86_64-linux.all.outPath 2>/dev/null
+            exit 1
+          fi
+          echo "ALL_PATH=$ALL_PATH"
+          CLOSURE_SIZE=$(nix-store -qR "$ALL_PATH" 2>/dev/null | wc -l)
+          echo "Closure: $CLOSURE_SIZE paths"
+          nix-store -qR "$ALL_PATH" | /tmp/attic/bin/attic push "$ATTIC_CACHE" --stdin
         timeout-minutes: 30
