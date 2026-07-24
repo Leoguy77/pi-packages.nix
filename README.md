@@ -65,14 +65,14 @@ home-manager switch --flake .
 
 ## Available Packages
 
-**5,441 packages** from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package) (3,547 Tier A + 1,894 Tier B).
+**5,504 packages** from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package) (3,595 Tier A + 1,909 Tier B).
 
 See [`registry/registry.json`](./registry/registry.json) for the full list.
 
 **Tiers:**
-- **Tier A** (3,547) — No npm dependencies (peerDeps only) → instant unpack from tarball
-- **Tier B with lockfile** (1,860) — Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached)
-- **Tier B fallback** (34) — Has dependencies but no valid lockfile (broken npm dep trees, private packages, git deps), builds via inline `npm install` (needs `--option sandbox false`)
+- **Tier A** (3,595) — No npm dependencies (peerDeps only) → instant unpack from tarball
+- **Tier B with lockfile** (1,893) — Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached)
+- **Tier B fallback** (16) — Has dependencies but no valid lockfile (broken npm dep trees, private packages, git deps), builds via inline `npm install` (needs `--option sandbox false`)
 
 ## How It Works
 
@@ -105,13 +105,13 @@ pi loads directly from store (no npm install)
 
 | Metric | Count |
 |--------|-------|
-| Total packages | 5,441 |
-| Tier A (zero deps, direct unpack) | 3,547 |
-| Tier B (has npm deps) | 1,894 |
-| With lockfile (`buildNpmPackage`, cached) | 1,860 |
-| Fallback (`stdenv.mkDerivation`, needs network) | 34 |
+| Total packages | 5,504 |
+| Tier A (zero deps, direct unpack) | 3,595 |
+| Tier B (has npm deps) | 1,909 |
+| With lockfile (`buildNpmPackage`, cached) | 1,893 |
+| Fallback (`stdenv.mkDerivation`, needs network) | 16 |
 
-Broken lockfile cleanup removes entries with unfixable integrity (git deps, yanked packages, private scoped packages). The 34 fallback packages have genuinely unresolvable npm dep trees.
+Broken lockfile cleanup removes entries with unfixable integrity (git deps, yanked packages, private scoped packages). The 16 fallback packages have genuinely unresolvable npm dep trees.
 
 ## Development
 
