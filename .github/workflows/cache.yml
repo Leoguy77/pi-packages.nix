@@ -35,21 +35,23 @@ jobs:
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build and push all packages
-        env:
-          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+      - name: Build attic CLI
+        run: nix build nixpkgs#attic-client --out-link /tmp/attic
+
+      - name: Build all packages
         run: |
-          # Build the all meta-package (uses Attic substituter to skip cached)
           nix build .#all --no-link --keep-going \
             --option sandbox false \
             --option max-jobs 4 || true
+        timeout-minutes: 60
 
-          # Get the all output path and push its closure to Attic
+      - name: Push closure to Attic
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+        run: |
           ALL_PATH=$(nix build .#all --no-link --print-out-paths 2>/dev/null)
-          if [ -n "$ALL_PATH" ]; then
-            echo "Pushing closure of: $ALL_PATH"
-            nix-store -qR "$ALL_PATH" | \
-              nix run nixpkgs#attic-client -- push \
-                "$ATTIC_CACHE" --stdin --token "$TOKEN"
-          fi
-        timeout-minutes: 120
+          if [ -z "$ALL_PATH" ]; then echo "No all path"; exit 0; fi
+          echo "Pushing closure of: $ALL_PATH"
+          nix-store -qR "$ALL_PATH" | /tmp/attic/bin/attic push \
+            "$ATTIC_CACHE" --stdin --token "$TOKEN"
+        timeout-minutes: 30
