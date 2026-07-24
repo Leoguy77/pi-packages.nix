@@ -7,11 +7,6 @@ on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'registry/registry.json'
-      - 'packages/**/package-lock.json'
 
 concurrency:
   group: attic-push
@@ -23,7 +18,7 @@ env:
   ATTIC_PUBLIC_KEY: pi-packages:OF+SNU2ALJB8M+cQP/RfFOuKIOMN0w4WiV8k01pvUC4=
 
 jobs:
-  build-and-push:
+  push:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -40,20 +35,21 @@ jobs:
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build all packages
-        run: |
-          nix build .#all --no-link --keep-going \
-            --option sandbox false \
-            --option max-jobs 4 || true
-        timeout-minutes: 60
-
-      - name: Push closure to Attic
+      - name: Build and push all packages
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
+          # Build the all meta-package (uses Attic substituter to skip cached)
+          nix build .#all --no-link --keep-going \
+            --option sandbox false \
+            --option max-jobs 4 || true
+
+          # Get the all output path and push its closure to Attic
           ALL_PATH=$(nix build .#all --no-link --print-out-paths 2>/dev/null)
-          echo "Pushing closure of: $ALL_PATH"
-          nix-store -qR "$ALL_PATH" | \
-            nix run nixpkgs#attic-client -- push \
-              "$ATTIC_CACHE" --stdin --token "$TOKEN"
-        timeout-minutes: 60
+          if [ -n "$ALL_PATH" ]; then
+            echo "Pushing closure of: $ALL_PATH"
+            nix-store -qR "$ALL_PATH" | \
+              nix run nixpkgs#attic-client -- push \
+                "$ATTIC_CACHE" --stdin --token "$TOKEN"
+          fi
+        timeout-minutes: 120
