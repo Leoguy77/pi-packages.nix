@@ -60,7 +60,6 @@ jobs:
 
       - name: Build, push and GC in cycles
         run: |
-          export NIX_REMOTE=
           BATCH=50
           TOTAL=$(wc -l < pkg-list.txt)
           for ((i=1; i<=TOTAL; i+=BATCH)); do
@@ -69,13 +68,16 @@ jobs:
             PACKAGES=$(sed -n "${i},${END}p" pkg-list.txt)
             echo "=== Cycle $(((i-1)/BATCH+1)): pkgs $i-$END ==="
 
-            # Build batch
+            # Build batch (Attic substituter skips cached, magic-nix-cache speeds up)
             safe_attrs=""
             while IFS= read -r pkg; do
               safe=$(echo "$pkg" | tr '.' '_')
               safe_attrs="$safe_attrs .#pi-$safe"
             done <<< "$PACKAGES"
-            nix build --no-link --keep-going --option sandbox false --option max-jobs 4 $safe_attrs || true
+            nix build --no-link --keep-going \
+              --option sandbox false \
+              --option max-jobs 4 \
+              $safe_attrs || true
 
             # Push each built path
             while IFS= read -r pkg; do
@@ -87,7 +89,7 @@ jobs:
             done <<< "$PACKAGES"
 
             # Garbage collect to free disk
-            nix store gc --option max-jobs 1 2>/dev/null || true
+            nix store gc 2>/dev/null || true
             df -h / | tail -1
           done
         timeout-minutes: 120
