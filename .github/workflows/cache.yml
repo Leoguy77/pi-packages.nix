@@ -36,30 +36,62 @@ jobs:
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build attic CLI and login
-        env:
-          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
-        run: |
-          nix build nixpkgs#attic-client --out-link /tmp/attic
-          /tmp/attic/bin/attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
+      - name: Build attic CLI
+        run: nix build nixpkgs#attic-client --out-link /tmp/attic
 
-      - name: Build all packages
+      - name: Get list of buildable packages
+        id: list
         run: |
-          nix build .#all --no-link --keep-going \
-            --option sandbox false \
-            --option max-jobs 4 || true
+          node -e "
+            const r = require('./registry/registry.json');
+            const names = Object.entries(r.packages)
+              .filter(([k,v]) => (v.tier==='B'||v.tier==='C') && v.npmDepsHash?.startsWith('sha256-'))
+              .map(([k]) => k);
+            const fs = require('fs');
+            fs.writeFileSync('pkg-list.txt', names.join('\n'), 'utf8');
+            console.log('Packages: ' + names.length);
+          "
+          echo "count=$(wc -l < pkg-list.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Build packages in batches
+        run: |
+          export NIX_REMOTE=  # bypass daemon to avoid OOM
+          BATCH=200
+          TOTAL=$(wc -l < pkg-list.txt)
+          for ((i=1; i<=TOTAL; i+=BATCH)); do
+            END=$((i+BATCH-1))
+            [ $END -gt $TOTAL ] && END=$TOTAL
+            PACKAGES=$(sed -n "${i},${END}p" pkg-list.txt | tr '\n' ' ')
+            echo "Batch $((i/BATCH+1)): pkgs $i-$END"
+            nix build --no-link --keep-going \
+              --option sandbox false \
+              --option max-jobs 4 \
+              $(for pkg in $PACKAGES; do
+                safe=$(echo "$pkg" | tr '.' '_')
+                printf '.#pi-%s ' "$safe"
+              done) || true
+          done
         timeout-minutes: 60
 
-      - name: Push closure to Attic
+      - name: Login to Attic
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
+        run: /tmp/attic/bin/attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
+
+      - name: Push to Attic
         run: |
-          ALL_PATH=$(nix build .#all --no-link --print-out-paths 2>/dev/null)
-          if [ -z "$ALL_PATH" ]; then
-            echo "ALL_PATH empty - trying direct eval"
-            nix eval .#packages.x86_64-linux.all.outPath 2>/dev/null
-            exit 1
-          fi
-          echo "ALL_PATH=$ALL_PATH"
-          CLOSURE_SIZE=$(nix-store -qR "$ALL_PATH" 2>/dev/null | wc -l)
-          echo "Closure: $CLOSURE_SIZE paths"
-          nix-store -qR "$ALL_PATH" | /tmp/attic/bin/attic push "$ATTIC_CACHE" --stdin
-        timeout-minutes: 30
+          export NIX_REMOTE=  # bypass daemon for consistent results
+          while IFS= read -r pkg; do
+            safe=$(echo "$pkg" | tr '.' '_')
+            attr=".#pi-$safe"
+            path=$(nix build --no-link --print-out-paths "$attr" 2>/dev/null)
+            if [ -n "$path" ] && [ "${path#/nix/store/}" != "$path" ]; then
+              /tmp/attic/bin/attic push "$ATTIC_CACHE" "$path" 2>/dev/null || true
+            fi
+          done < pkg-list.txt
+        timeout-minutes: 60
+
+      - name: Summary
+        run: |
+          echo "## Attic Cache Push" >> "$GITHUB_STEP_SUMMARY"
+          echo "Total packages: ${{ steps.list.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
