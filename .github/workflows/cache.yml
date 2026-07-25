@@ -53,43 +53,44 @@ jobs:
           "
           echo "count=$(wc -l < pkg-list.txt)" >> "$GITHUB_OUTPUT"
 
-      - name: Build packages in batches
-        run: |
-          export NIX_REMOTE=  # bypass daemon to avoid OOM
-          BATCH=200
-          TOTAL=$(wc -l < pkg-list.txt)
-          for ((i=1; i<=TOTAL; i+=BATCH)); do
-            END=$((i+BATCH-1))
-            [ $END -gt $TOTAL ] && END=$TOTAL
-            PACKAGES=$(sed -n "${i},${END}p" pkg-list.txt | tr '\n' ' ')
-            echo "Batch $((i/BATCH+1)): pkgs $i-$END"
-            nix build --no-link --keep-going \
-              --option sandbox false \
-              --option max-jobs 4 \
-              $(for pkg in $PACKAGES; do
-                safe=$(echo "$pkg" | tr '.' '_')
-                printf '.#pi-%s ' "$safe"
-              done) || true
-          done
-        timeout-minutes: 60
-
       - name: Login to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: /tmp/attic/bin/attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
 
-      - name: Push to Attic
+      - name: Build, push and GC in cycles
         run: |
-          export NIX_REMOTE=  # bypass daemon for consistent results
-          while IFS= read -r pkg; do
-            safe=$(echo "$pkg" | tr '.' '_')
-            attr=".#pi-$safe"
-            path=$(nix build --no-link --print-out-paths "$attr" 2>/dev/null)
-            if [ -n "$path" ] && [ "${path#/nix/store/}" != "$path" ]; then
-              /tmp/attic/bin/attic push "$ATTIC_CACHE" "$path" 2>/dev/null || true
-            fi
-          done < pkg-list.txt
-        timeout-minutes: 60
+          export NIX_REMOTE=
+          BATCH=50
+          TOTAL=$(wc -l < pkg-list.txt)
+          for ((i=1; i<=TOTAL; i+=BATCH)); do
+            END=$((i+BATCH-1))
+            [ $END -gt $TOTAL ] && END=$TOTAL
+            PACKAGES=$(sed -n "${i},${END}p" pkg-list.txt)
+            echo "=== Cycle $(((i-1)/BATCH+1)): pkgs $i-$END ==="
+
+            # Build batch
+            safe_attrs=""
+            while IFS= read -r pkg; do
+              safe=$(echo "$pkg" | tr '.' '_')
+              safe_attrs="$safe_attrs .#pi-$safe"
+            done <<< "$PACKAGES"
+            nix build --no-link --keep-going --option sandbox false --option max-jobs 4 $safe_attrs || true
+
+            # Push each built path
+            while IFS= read -r pkg; do
+              safe=$(echo "$pkg" | tr '.' '_')
+              path=$(nix build --no-link --print-out-paths ".#pi-$safe" 2>/dev/null)
+              if [ -n "$path" ] && [ "${path#/nix/store/}" != "$path" ]; then
+                /tmp/attic/bin/attic push "$ATTIC_CACHE" "$path" 2>/dev/null || true
+              fi
+            done <<< "$PACKAGES"
+
+            # Garbage collect to free disk
+            nix store gc --option max-jobs 1 2>/dev/null || true
+            df -h / | tail -1
+          done
+        timeout-minutes: 120
 
       - name: Summary
         run: |
