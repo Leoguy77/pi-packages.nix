@@ -60,6 +60,7 @@ jobs:
 
       - name: Build, push and GC in cycles
         run: |
+          set +e
           BATCH=50
           TOTAL=$(wc -l < pkg-list.txt)
           for ((i=1; i<=TOTAL; i+=BATCH)); do
