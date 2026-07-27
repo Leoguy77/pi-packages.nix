@@ -30,8 +30,8 @@ jobs:
           flakehub: false
           extra-conf: |
             accept-flake-config = true
-            substituters = https://cache.nixos.org ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= ${{ env.ATTIC_PUBLIC_KEY }}
+            extra-substituters = ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
+            extra-trusted-public-keys = ${{ env.ATTIC_PUBLIC_KEY }}
 
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
@@ -93,7 +93,7 @@ jobs:
             nix store gc 2>/dev/null || true
             df -h / | tail -1
           done
-        timeout-minutes: 120
+        timeout-minutes: 360
 
       - name: Summary
         run: |
