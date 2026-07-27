@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install Nix with Attic substituter
         uses: DeterminateSystems/nix-installer-action@main
         with:
@@ -31,78 +32,80 @@ jobs:
             accept-flake-config = true
             extra-substituters = ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
             extra-trusted-public-keys = ${{ env.ATTIC_PUBLIC_KEY }}
+
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
+
       - name: Build attic CLI
         run: nix build nixpkgs#attic-client --out-link /tmp/attic
-      - name: Get list of buildable packages
-        id: list
-        run: |
-          node -e "
-            const r = require('./registry/registry.json');
-            const names = Object.entries(r.packages)
-              .filter(([k,v]) => (v.tier==='B'||v.tier==='C') && v.npmDepsHash?.startsWith('sha256-'))
-              .map(([k]) => k);
-            require('fs').writeFileSync('pkg-list.txt', names.join('\n'), 'utf8');
-            console.log('Packages: ' + names.length);
-          "
-          echo "count=$(wc -l < pkg-list.txt)" >> "$GITHUB_OUTPUT"
+
       - name: Login to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: /tmp/attic/bin/attic login ci "$ATTIC_ENDPOINT" "$TOKEN" --set-default
-      - name: Build, push and GC in cycles
+
+      - name: Build and push what's missing from Attic
+        env:
+          TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: |
           set +e
-          BATCH=50
-          TOTAL=$(wc -l < pkg-list.txt)
-          for ((i=1; i<=TOTAL; i+=BATCH)); do
-            END=$((i+BATCH-1))
-            [ $END -gt $TOTAL ] && END=$TOTAL
-            PACKAGES=$(sed -n "${i},${END}p" pkg-list.txt)
-            echo "=== Cycle $(((i-1)/BATCH+1)): pkgs $i-$END ==="
+          node -e "
+            const {spawnSync}=require('child_process');
+            const {readFileSync}=require('fs');
+            const reg=JSON.parse(readFileSync('registry/registry.json','utf8'));
+            const safe=n=>n.replace(/\./g,'_');
 
-            # Check each package: build if not already in Attic
-            TO_BUILD=""
-            TO_SKIP=0
-            while IFS= read -r pkg; do
-              safe=$(echo "$pkg" | tr '.' '_')
-              path=$(nix build --no-link --print-out-paths ".#pi-$safe" 2>/dev/null)
-              if [ -n "$path" ] && [ "${path#/nix/store/}" != "$path" ]; then
-                hash=$(basename "$path" | cut -d- -f1)
-                if curl -sfI "$ATTIC_ENDPOINT/$ATTIC_CACHE/$hash.narinfo" >/dev/null 2>&1; then
-                  TO_SKIP=$((TO_SKIP+1))
-                  continue
-                fi
-              fi
-              TO_BUILD="$TO_BUILD .#pi-$safe"
-            done <<< "$PACKAGES"
-            echo "Skip=$TO_SKIP Build=$((END-i+1-TO_SKIP))"
+            // Get all Tier B/C with hashes
+            const names=Object.entries(reg.packages)
+              .filter(([k,v])=>(v.tier==='B'||v.tier==='C')&&v.npmDepsHash?.startsWith('sha256-'))
+              .map(([k])=>k);
+            console.log('Packages: '+names.length);
 
-            if [ -n "$TO_BUILD" ]; then
-              nix build --no-link --keep-going \
-                --option sandbox false \
-                --option max-jobs 4 \
-                $TO_BUILD || true
-            fi
+            // Evaluate all outPaths in one eval call (fast, no builds)
+            const outPaths=names.map(k=>{
+              const r=spawnSync('nix',['eval','--json','.#packages.x86_64-linux.pi-'+safe(k)+'.outPath'],{timeout:5000});
+              return r.status===0 ? JSON.parse(r.stdout.toString().trim()) : null;
+            });
 
-            # Push newly built paths
-            while IFS= read -r pkg; do
-              safe=$(echo "$pkg" | tr '.' '_')
-              path=$(nix build --no-link --print-out-paths ".#pi-$safe" 2>/dev/null)
-              if [ -n "$path" ] && [ "${path#/nix/store/}" != "$path" ]; then
-                hash=$(basename "$path" | cut -d- -f1)
-                if ! curl -sfI "$ATTIC_ENDPOINT/$ATTIC_CACHE/$hash.narinfo" >/dev/null 2>&1; then
-                  /tmp/attic/bin/attic push "$ATTIC_CACHE" "$path" 2>/dev/null || true
-                fi
-              fi
-            done <<< "$PACKAGES"
+            // Filter to packages NOT in Attic
+            const toBuild=names.filter((k,i)=>{
+              const p=outPaths[i];
+              if(!p||!p.startsWith('/nix/store/'))return true;
+              const hash=p.split('/').pop().split('-')[0];
+              // Check Attic with fast HTTP HEAD
+              const {spawnSync:run}=require('child_process');
+              const check=run('curl',['-sfI','--max-time','2',process.env.ATTIC_ENDPOINT+'/'+process.env.ATTIC_CACHE+'/'+hash+'.narinfo']);
+              return check.status!==0;
+            });
+            console.log('Already cached: '+(names.length-toBuild.length));
+            console.log('Need building: '+toBuild.length);
 
-            nix store gc 2>/dev/null || true
-            df -h / | tail -1
-          done
+            // Build in batches of 200, push as we go
+            const BATCH=200;
+            let pushed=0;
+            for(let i=0;i<toBuild.length;i+=BATCH){
+              const batch=toBuild.slice(i,i+BATCH);
+              const attrs=batch.map(k=>'.#pi-'+safe(k));
+              console.log('Build batch '+Math.floor(i/BATCH+1)+': '+attrs.length+' pkgs');
+
+              spawnSync('nix',[
+                'build','--no-link','--keep-going',
+                '--option','sandbox','false',
+                '--option','max-jobs','4',
+                ...attrs
+              ],{stdio:['ignore','inherit','inherit'],timeout:600000});
+
+              for(const k of batch){
+                const r=spawnSync('nix',['build','--no-link','--print-out-paths','.#pi-'+safe(k)],{timeout:3000});
+                if(r.status!==0)continue;
+                const p=r.stdout.toString().trim();
+                if(!p.startsWith('/nix/store/'))continue;
+                const push=spawnSync('/tmp/attic/bin/attic',['push',process.env.ATTIC_CACHE,p],{timeout:60000});
+                if(push.status===0)pushed++;
+              }
+              console.log('Pushed: '+pushed);
+              spawnSync('nix',['store','gc'],{stdio:'ignore'});
+            }
+            console.log('Done: pushed='+pushed);
+          "
         timeout-minutes: 360
-      - name: Summary
-        run: |
-          echo "## Attic Cache Push" >> "$GITHUB_STEP_SUMMARY"
-          echo "Total packages: ${{ steps.list.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
