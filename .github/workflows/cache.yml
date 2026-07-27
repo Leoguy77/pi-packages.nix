@@ -61,20 +61,18 @@ jobs:
               .map(([k])=>k);
             console.log('Packages: '+names.length);
 
-            // Evaluate all outPaths in one eval call (fast, no builds)
-            const outPaths=names.map(k=>{
-              const r=spawnSync('nix',['eval','--json','.#packages.x86_64-linux.pi-'+safe(k)+'.outPath'],{timeout:5000});
-              return r.status===0 ? JSON.parse(r.stdout.toString().trim()) : null;
-            });
+            // Get ALL outPaths in ONE eval (single flake eval, fast)
+            const allOut = JSON.parse(
+              spawnSync('nix',['eval','--json','--apply','x: builtins.mapAttrs (n: v: v.outPath) x','.#packages.x86_64-linux'],{timeout:300000}).stdout.toString()
+            );
 
             // Filter to packages NOT in Attic
-            const toBuild=names.filter((k,i)=>{
-              const p=outPaths[i];
+            const toBuild=names.filter(k=>{
+              const attr='pi-'+safe(k);
+              const p=allOut[attr];
               if(!p||!p.startsWith('/nix/store/'))return true;
               const hash=p.split('/').pop().split('-')[0];
-              // Check Attic with fast HTTP HEAD
-              const {spawnSync:run}=require('child_process');
-              const check=run('curl',['-sfI','--max-time','2',process.env.ATTIC_ENDPOINT+'/'+process.env.ATTIC_CACHE+'/'+hash+'.narinfo']);
+              const check=spawnSync('curl',['-sfI','--max-time','2',process.env.ATTIC_ENDPOINT+'/'+process.env.ATTIC_CACHE+'/'+hash+'.narinfo'],{timeout:3000});
               return check.status!==0;
             });
             console.log('Already cached: '+(names.length-toBuild.length));
