@@ -52,7 +52,10 @@ else
       else "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     
     dontNpmBuild = true;
-    npmInstallFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" "--legacy-peer-deps" ];
+    # Suppress scripts globally (npm rebuild in configurePhase) and skip optional
+    # platform-specific deps (e.g., @biomejs/cli-win32-arm64 on x86_64-linux).
+    npmFlags = [ "--ignore-scripts" "--omit=optional" "--no-audit" "--no-fund" ];
+    npmInstallFlags = [ "--legacy-peer-deps" ];
     makeCacheWritable = true;
     # npm install runs during configurePhase; unset SSL_CERT_FILE first
     preConfigure = ''
@@ -84,7 +87,7 @@ else
       unset SSL_CERT_FILE NIX_SSL_CERT_FILE
       export NODE_TLS_REJECT_UNAUTHORIZED=0
       tar -xzf $src --strip-components=1
-      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --loglevel=error
+      HOME=$TMPDIR npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps --omit=optional --loglevel=error
       rm -rf node_modules/.cache 2>/dev/null || true
     '';
     
