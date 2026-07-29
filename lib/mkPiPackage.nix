@@ -56,6 +56,8 @@ else
     # platform-specific deps (e.g., @biomejs/cli-win32-arm64 on x86_64-linux).
     npmFlags = [ "--ignore-scripts" "--omit=optional" "--no-audit" "--no-fund" ];
     npmInstallFlags = [ "--legacy-peer-deps" ];
+    # Version 2 fetcher handles more edge cases (lockfiles with missing resolved URLs)
+    npmDepsFetcherVersion = 2;
     makeCacheWritable = true;
     # npm install runs during configurePhase; unset SSL_CERT_FILE first
     preConfigure = ''
