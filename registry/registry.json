@@ -245231,6 +245231,178 @@
       ],
       "description": "Unified visible Herdr sidecars for Pi: sidecar-as-subagent with lightweight prompt launches, frozen /goal audit chain, wait-all, and selectable agent backends (Codex/Claude/Pi).",
       "downloads": 0
+    },
+    "pi-provider-antigravity": {
+      "name": "pi-provider-antigravity",
+      "version": "0.3.0",
+      "tarball": "https://registry.npmjs.org/pi-provider-antigravity/-/pi-provider-antigravity-0.3.0.tgz",
+      "hash": "sha512-fkutRJy1Ptbx8zq52lJ+6NxduG05OPkaQS4R/SRn1UaE0DRNzDAHlF2IMuTR38ojp1/3VTBt2Q3pBcklG23z0w==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./dist/index.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": ">=0.80.0",
+        "@earendil-works/pi-coding-agent": ">=0.80.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "antigravity",
+        "google",
+        "oauth",
+        "provider"
+      ],
+      "description": "Minimal Antigravity provider for Pi Coding Agent",
+      "downloads": 0
+    },
+    "pi-debug-mode": {
+      "name": "pi-debug-mode",
+      "version": "0.1.7",
+      "tarball": "https://registry.npmjs.org/pi-debug-mode/-/pi-debug-mode-0.1.7.tgz",
+      "hash": "sha512-ghy9wU4J4ViEzQCV2nD9N4T5Yq/DfDLN02PK4bt27F9Y4tJyuH48suMUcIHqcIVeZSA0e1QERWvo87rq60FBzA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ],
+        "image": "https://cdn.jsdelivr.net/gh/liush2yuxjtu/pi-debug-mode@v0.1.7/artifacts/demo/pi-debug-mode-preview.gif"
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi coding agent",
+        "debug mode",
+        "evidence-driven debugging",
+        "hypothesis-driven debugging",
+        "runtime instrumentation",
+        "developer tools",
+        "cursor debug mode"
+      ],
+      "description": "Cursor-style debug mode for the Pi coding agent, with evidence-first debugging and targeted runtime probes.",
+      "downloads": 0
+    },
+    "pi-memnest": {
+      "name": "pi-memnest",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/pi-memnest/-/pi-memnest-0.2.0.tgz",
+      "hash": "sha512-4mfpnFyMey5kvVIpUx/y/dkMt+Ab4xgDlcNJp2lkoelpWgbz4aa0b6dmGyq/YAD5bgQeq88BCp5e+SckYZBFRQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./dist/index.mjs"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-extension",
+        "extension",
+        "memory",
+        "memnest",
+        "mcp",
+        "ai-memory",
+        "rag",
+        "sqlite",
+        "bm25",
+        "vector-search"
+      ],
+      "description": "Memnest memory bridge for pi — exposes the canonical memory_* and secret_* tools backed by a local memnest server",
+      "downloads": 0
+    },
+    "rs25-labs-pi-mindvault": {
+      "name": "@rs25-labs/pi-mindvault",
+      "version": "0.2.5",
+      "tarball": "https://registry.npmjs.org/@rs25-labs/pi-mindvault/-/pi-mindvault-0.2.5.tgz",
+      "hash": "sha512-H783IAgLzyZLK4AY3YZ/26fInqd//CelHRBuWtuc0ko7ziJWzWK/CAmhF9wsvCxdKXsHibHRQWloUs0Yg+mdtg==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./extensions"
+        ],
+        "image": "https://raw.githubusercontent.com/rs25-labs/pi-mindvault/main/preview.png"
+      },
+      "dependencies": {
+        "sqlite-vec": "^0.1.9"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "^0.85.1",
+        "typebox": "^1.3.28"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Local-first sqlite memory for pi — Hermes durability, Honcho-style recall, no server.",
+      "downloads": 0
+    },
+    "pi-zalo-plus": {
+      "name": "pi-zalo-plus",
+      "version": "1.0.1",
+      "tarball": "https://registry.npmjs.org/pi-zalo-plus/-/pi-zalo-plus-1.0.1.tgz",
+      "hash": "sha512-EaM+D2Opexhu4HGPdeK0aiyO+3ddfVTgpgFvYh7alAeZL7X/qWn6Mdi8IswmXuEXRHrVvrlXFDAz/vnYTY3hig==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ],
+        "image": "https://raw.githubusercontent.com/trongthanh/pi-zalo-plus/main/docs/img/pi-zalo-plus.png"
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": ">=0.84.0",
+        "typebox": "*"
+      },
+      "keywords": [
+        "coding-agent",
+        "pi-extension",
+        "pi-package",
+        "remote-control",
+        "zalo"
+      ],
+      "description": "Full Zalo control of pi coding agent — commands, interactive UI, model/session management, file transfer, and real-time streaming output, all from Zalo",
+      "downloads": 0
+    },
+    "zaycruz-pi-context-manager": {
+      "name": "@zaycruz/pi-context-manager",
+      "version": "1.1.0",
+      "tarball": "https://registry.npmjs.org/@zaycruz/pi-context-manager/-/pi-context-manager-1.1.0.tgz",
+      "hash": "sha512-7R8a8Tj+EBUkN/311JVEtCpY8a9SjGgRsn97niqszKGeWdfWUX97SW1IJZtkwm6UwedX8FVBigHgsKWYQAjszQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./extensions/context-manager.ts"
+        ],
+        "skills": [
+          "./skills/context-manager/SKILL.md"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi-coding-agent",
+        "oh-my-pi",
+        "context-management",
+        "compaction",
+        "agent"
+      ],
+      "description": "Let Pi and OMP agents inspect and selectively manage their conversation context before runtime compaction.",
+      "downloads": 0
     }
   }
 }
