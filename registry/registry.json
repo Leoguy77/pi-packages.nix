@@ -339465,6 +339465,1692 @@
       ],
       "description": "PI WEB plugin for pi-subagents: a Subagents tab listing the session's runs with their output, a reply card for a child's supervisor request, and short rows for subagent notices.",
       "downloads": 0
+    },
+    "pi-beyin": {
+      "name": "pi-beyin",
+      "version": "0.1.16",
+      "tarball": "https://registry.npmjs.org/pi-beyin/-/pi-beyin-0.1.16.tgz",
+      "hash": "sha512-HPjdpB4Moe5aFwjyRr/S+48CaBHAqdVm7FGEEsyXw5YttVO86NAG693A5M8HOCFZecq2Lekq4D09a5i2l7TVrA==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ],
+        "extensions": [
+          "./extensions/context.ts",
+          "./extensions/distillation.ts",
+          "./extensions/jev.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-extension",
+        "second-brain",
+        "vault",
+        "context",
+        "memory",
+        "skills"
+      ],
+      "description": "pi-native bridge for the beyin second brain: context injection, distillation reminders, and Jev advisor tools.",
+      "downloads": 0
+    },
+    "pi-dev-flow": {
+      "name": "pi-dev-flow",
+      "version": "0.61.1",
+      "tarball": "https://registry.npmjs.org/pi-dev-flow/-/pi-dev-flow-0.61.1.tgz",
+      "hash": "sha512-xXh3nH8/JyJru4niG+u54UOTbUnHkeCQfUcwoIN5ocHGWdDDwtkOx6aFW8suTxqO5tXJbMm0BqNkZwsCDhiqYw==",
+      "tier": "A",
+      "piManifest": {
+        "image": "./banner.png",
+        "skills": [
+          "./skills"
+        ],
+        "extensions": [
+          "./extensions/dev-flow.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-coding-agent",
+        "extension",
+        "workflow",
+        "dev-flow",
+        "spec",
+        "plan",
+        "release",
+        "semver",
+        "changelog",
+        "git-worktree",
+        "guardrails"
+      ],
+      "description": "Enforced feature workflow for Pi: plan → implement → pre-release → release, gated checkpoints, self-improvement reflections, one git worktree per feature, changelog + publish as part of the release",
+      "downloads": 0
+    },
+    "pi-webman": {
+      "name": "pi-webman",
+      "version": "0.2.1",
+      "tarball": "https://registry.npmjs.org/pi-webman/-/pi-webman-0.2.1.tgz",
+      "hash": "sha512-0YMm9LMqd6Aa3k3J0tL3M/iEslGJqK1ZCgQvVZQafj4WlB92MFtveSZJ8ztSBVO5PBqFYvpa5gCEwAvQy1uCGA==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://raw.githubusercontent.com/steelburn/pi-webman/main/docs/cockpit.png",
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "web-ui",
+        "cockpit",
+        "slash-commands",
+        "popups",
+        "extension-ui"
+      ],
+      "description": "A futuristic web cockpit for Pi — live transcript, telemetry, models, tools and command uplink.",
+      "downloads": 0
+    },
+    "jiangkoumo-pi-pstack": {
+      "name": "@jiangkoumo/pi-pstack",
+      "version": "0.3.13",
+      "tarball": "https://registry.npmjs.org/@jiangkoumo/pi-pstack/-/pi-pstack-0.3.13.tgz",
+      "hash": "sha512-UuvQFYnhz6UkyU3sU2889oLXubcwz66XwkAxNUNw0unE+PkiCl6mcM7yln7A0RFlA3r6FTj0xFTRd9+kKISLPA==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ],
+        "extensions": [
+          "./extensions/pstack/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "pi-subagents": ">=0.79.0 <0.80.0",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Pi adaptation of pstack engineering skills, workflows, and bounded autonomous execution",
+      "downloads": 0
+    },
+    "pi-cc-loop": {
+      "name": "pi-cc-loop",
+      "version": "0.7.0",
+      "tarball": "https://registry.npmjs.org/pi-cc-loop/-/pi-cc-loop-0.7.0.tgz",
+      "hash": "sha512-DIdHnjwi8qfBQXGgIwvA1OmXoSYcD4pefEl42ZKoJcRBVUG/ZJfO+501h+Cq68zxVFlMjH+fazE/6RrrXcIRKg==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "extension",
+        "loop",
+        "cron",
+        "scheduler",
+        "claude-code"
+      ],
+      "description": "Claude Code compatible /loop for the Pi coding agent: cron-scheduled fixed intervals, self-paced chains, and the same dispatch semantics as Claude Code.",
+      "downloads": 0
+    },
+    "pi-cc-monitor": {
+      "name": "pi-cc-monitor",
+      "version": "0.7.0",
+      "tarball": "https://registry.npmjs.org/pi-cc-monitor/-/pi-cc-monitor-0.7.0.tgz",
+      "hash": "sha512-C92fIv9vueRswL2LQz5ANf+RnwnzzR/wWnUb4o8x5LtQqPNSWeMWbRinqo8GyJJzgAje4za58HFBYklFXdPbmA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "extension",
+        "monitor",
+        "background",
+        "watch",
+        "claude-code"
+      ],
+      "description": "Claude Code compatible Monitor for the Pi coding agent: a background watch that turns stdout lines or WebSocket frames into notifications that wake the agent.",
+      "downloads": 0
+    },
+    "pi-ttyd": {
+      "name": "pi-ttyd",
+      "version": "0.3.0",
+      "tarball": "https://registry.npmjs.org/pi-ttyd/-/pi-ttyd-0.3.0.tgz",
+      "hash": "sha512-TdA4mCv585KtPhcnFY73T4ZaJ7bpQD091t1/c6JNmP+gu0ta0vI7HHDtcqV+O1UknmLW6rKe1lL+0JKbCs0UEQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "^1.3.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "ttyd",
+        "notifications",
+        "pi-extension"
+      ],
+      "description": "Set ttyd's tab title, notify when Pi is ready, and accept dropped images.",
+      "downloads": 0
+    },
+    "pi-waza-rules": {
+      "name": "pi-waza-rules",
+      "version": "0.1.2",
+      "tarball": "https://registry.npmjs.org/pi-waza-rules/-/pi-waza-rules-0.1.2.tgz",
+      "hash": "sha512-EUR4Gps5xTJch54xQJod4sXh63ziNppyoC4agJkrOYO5g0Ry93UrgkM5fVSA4zeg6bBJzeie0KuUsjmMfrNLQw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Pi extension that downloads Waza rules from GitHub and adds them to the system prompt",
+      "downloads": 0
+    },
+    "utpalsinghdev-pi-context-window": {
+      "name": "@utpalsinghdev/pi-context-window",
+      "version": "0.2.1",
+      "tarball": "https://registry.npmjs.org/@utpalsinghdev/pi-context-window/-/pi-context-window-0.2.1.tgz",
+      "hash": "sha512-I5xdOuzRw25h8mVAOjgIu6tIKkSWbIAGprwQ1I5XcXHqIsSVzwjdBZF6zjx/Wtu/ACCY/YNSLbV22aNVJ4/e8A==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://raw.githubusercontent.com/utpalsinghdev/pi-extensions/main/packages/pi-context-window/assets/pi-context-window-demo.gif",
+        "extensions": [
+          "./extensions/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "context-window"
+      ],
+      "description": "Show the agent the context window size, usage, and a planning threshold you set.",
+      "downloads": 0
+    },
+    "pi-harness-whatsapp": {
+      "name": "pi-harness-whatsapp",
+      "version": "0.1.3",
+      "tarball": "https://registry.npmjs.org/pi-harness-whatsapp/-/pi-harness-whatsapp-0.1.3.tgz",
+      "hash": "sha512-QqAQmgWBATAmR41ldn9VHGhShs7gvz2KdR1GvY0VmnMnIw49d1WxfN0Y0Drt+6pnLidVHfEzeiw6Zv3FiyY/DQ==",
+      "tier": "B",
+      "piManifest": {
+        "image": "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {
+        "franc": "^6.2.0",
+        "baileys": "7.0.0-rc14",
+        "qrcode-terminal": "^0.12.0"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-extension",
+        "whatsapp",
+        "baileys",
+        "voice",
+        "whisper",
+        "supertonic",
+        "openvino",
+        "tts",
+        "speech-to-text"
+      ],
+      "description": "Talk to Pi from WhatsApp: images, files and optional voice notes in and out, automatic replies, group chats, poll menus to control Pi.",
+      "downloads": 0
+    },
+    "asanabrial-leteo-pi": {
+      "name": "@asanabrial/leteo-pi",
+      "version": "0.4.2",
+      "tarball": "https://registry.npmjs.org/@asanabrial/leteo-pi/-/leteo-pi-0.4.2.tgz",
+      "hash": "sha512-5GKnt71dtf4mMce0ZaGhvMhqFZMQP6f4l1/ZyU+T/hcMz2JTj7ZE7/H4gp12OOVW+bXkx5LmmDWidFUFuri4yw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./leteo.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "leteo",
+        "memory",
+        "persistent-memory",
+        "mcp",
+        "coding-agent",
+        "extension"
+      ],
+      "description": "Leteo persistent memory for Pi: session lifecycle, prompt and tool capture, compaction recovery, and the memory tools.",
+      "downloads": 0
+    },
+    "taoc-pi-mlx-models": {
+      "name": "@taoc/pi-mlx-models",
+      "version": "0.4.0",
+      "tarball": "https://registry.npmjs.org/@taoc/pi-mlx-models/-/pi-mlx-models-0.4.0.tgz",
+      "hash": "sha512-EBLS4ROdvlUPZEQOyHccBxh9AV0KPFZ+jEIwNoaGVrAoUMMzaT93XRrpwq1pRH5/PuaBBukRGwv/kuvOCsOylg==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://raw.githubusercontent.com/The-Artificer-of-Ciphers-LLC/pi-mlx-models/main/assets/preset-selector.png",
+        "extensions": [
+          "dist/index.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "mlx",
+        "llm",
+        "extension"
+      ],
+      "description": "Local MLX model launcher extension for Pi",
+      "downloads": 0
+    },
+    "pi-quiet-tool-calls": {
+      "name": "pi-quiet-tool-calls",
+      "version": "0.2.1",
+      "tarball": "https://registry.npmjs.org/pi-quiet-tool-calls/-/pi-quiet-tool-calls-0.2.1.tgz",
+      "hash": "sha512-LuIBmU+iN0dv/pM1lAv37hc/9Rrclj/4NCoFO27hnb+eGEvUPl8eVvSapvgX/cYnqG6lUWSQbTncmrxMkyIUhw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi",
+        "tool-calls",
+        "tui"
+      ],
+      "description": "Pi extension that collapses every tool call to a single line: one summary per call, click or Ctrl+O to expand.",
+      "downloads": 0
+    },
+    "cx-amazon-sp-api": {
+      "name": "cx-amazon-sp-api",
+      "version": "0.1.2",
+      "tarball": "https://registry.npmjs.org/cx-amazon-sp-api/-/cx-amazon-sp-api-0.1.2.tgz",
+      "hash": "sha512-gEgCIt52IBS1PpbLeXTh/tdcJuUcVt6dwZ5LVKCQlDwZ51AGNLZU4tys727LRyCwoD3z5o8EV9a7Sb3itzks5w==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "",
+      "downloads": 0
+    },
+    "pi-recollect": {
+      "name": "pi-recollect",
+      "version": "2.0.1",
+      "tarball": "https://registry.npmjs.org/pi-recollect/-/pi-recollect-2.0.1.tgz",
+      "hash": "sha512-3nDVswDBier8LcXFB45aMmJGvmX9Z4Ako+n3YjZ3P25rUR9y+uO42MTQNpfJVCJ7/3f5r3Dls0JfGIf5StG1hg==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "memory"
+      ],
+      "description": "Silent background cross-session memory for Pi: learns from finished sessions, injects a compact memory index, and lets the agent grep deeper memory on demand.",
+      "downloads": 0
+    },
+    "fan92rus-pi-goal-x": {
+      "name": "@fan92rus/pi-goal-x",
+      "version": "0.32.3-fan.10",
+      "tarball": "https://registry.npmjs.org/@fan92rus/pi-goal-x/-/pi-goal-x-0.32.3-fan.10.tgz",
+      "hash": "sha512-G47ZHTRo4fILBg1b4qVNaqicU+57Xm8X61fDxIihbdsfAoDRKr5AWy29E19erC3ih+VSSiUwbkNMN8p9EcA3Ng==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://github.com/tmonk/pi-goal-x/raw/main/pi-goal-x.png",
+        "extensions": [
+          "extensions/goal.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "^1.3.11",
+        "@earendil-works/pi-ai": ">=0.83.0 <2.0.0",
+        "@earendil-works/pi-tui": ">=0.83.0 <2.0.0",
+        "@earendil-works/pi-coding-agent": ">=0.83.0 <2.0.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-extension",
+        "goal",
+        "sisyphus",
+        "autoresearch",
+        "agent-loop",
+        "long-running"
+      ],
+      "description": "Adds /goal to pi: conversational goal planning, flexible or ordered goals, persistent progress, and an independent completion auditor.",
+      "downloads": 0
+    },
+    "oisin-ee-pi-prewalk-kit": {
+      "name": "@oisin-ee/pi-prewalk-kit",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@oisin-ee/pi-prewalk-kit/-/pi-prewalk-kit-0.1.1.tgz",
+      "hash": "sha512-I/0seDgtUJqAOE9muGLmWWbPUJk5V3Wc4qemxE32uKm9pqr9Ja88JWZJPqXZu3Iifa66jor3IWjERo8Mx47IaA==",
+      "tier": "B",
+      "piManifest": {
+        "image": "https://raw.githubusercontent.com/oisin-ee/pi-prewalk/main/assets/prewalk.png",
+        "extensions": [
+          "./node_modules/@oisin-ee/pi-todo/src/index.ts",
+          "./node_modules/@oisin-ee/pi-prewalk/src/index.ts"
+        ]
+      },
+      "dependencies": {
+        "@oisin-ee/pi-todo": "0.1.1",
+        "@oisin-ee/pi-prewalk": "0.1.1"
+      },
+      "peerDependencies": {},
+      "keywords": [
+        "pi-extension",
+        "pi-package",
+        "prewalk",
+        "todo"
+      ],
+      "description": "pi-prewalk and pi-todo in one install: a frontier model plans, a cheaper model finishes.",
+      "downloads": 0
+    },
+    "yugimob-pi-opencode-go-rotation": {
+      "name": "@yugimob/pi-opencode-go-rotation",
+      "version": "1.7.1",
+      "tarball": "https://registry.npmjs.org/@yugimob/pi-opencode-go-rotation/-/pi-opencode-go-rotation-1.7.1.tgz",
+      "hash": "sha512-0fET74sZLX3B/puf8K79yxtV1tbhY3rhRLgCRIDZd12nGbYxNsPqPO7YCiSd5ZNPJjFmmSu4KMD2z7ZKOt6KSw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./dist/index.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@mariozechner/pi-coding-agent": ">=0.71.1",
+        "@earendil-works/pi-coding-agent": ">=1.0.0"
+      },
+      "keywords": [
+        "pi-extension",
+        "pi-package",
+        "opencode",
+        "api-key-rotation",
+        "rate-limit",
+        "usage"
+      ],
+      "description": "Rotate between multiple OpenCode Go API keys with reactive 429, rate-limit, and watchdog stall detection, plus live footer usage for the active key",
+      "downloads": 0
+    },
+    "ysskrishna-ai-agent-skills": {
+      "name": "@ysskrishna/ai-agent-skills",
+      "version": "1.4.1",
+      "tarball": "https://registry.npmjs.org/@ysskrishna/ai-agent-skills/-/ai-agent-skills-1.4.1.tgz",
+      "hash": "sha512-66sDKkWxePE6DzcV7oqgmAHX5WR0T9Ek2DrY9wM7o3T8+SerwcEOUk/mMGOj4CNqbWOGRtkoYsAPDvBegF8Dmg==",
+      "tier": "A",
+      "piManifest": {},
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "skills",
+        "agents",
+        "agent-skills",
+        "agentskills",
+        "skill-md",
+        "cursor",
+        "claude-code",
+        "thinking",
+        "decision-support",
+        "six-thinking-hats",
+        "critical-thinking",
+        "systems-thinking",
+        "creative-thinking",
+        "strategic-thinking",
+        "analytical-thinking",
+        "lateral-thinking",
+        "design-thinking",
+        "first-principles-thinking",
+        "ethical-thinking",
+        "five-whys",
+        "swot-analysis",
+        "pre-mortem",
+        "tradeoff-analysis",
+        "prioritization",
+        "fermi-estimation",
+        "thinking-method-selector",
+        "brainstorming",
+        "llm",
+        "decision-making",
+        "root-cause-analysis",
+        "postmortem",
+        "brainstorm",
+        "problem-solving",
+        "pi-package",
+        "opencode-plugin"
+      ],
+      "description": "Curated Agent Skills (SKILL.md): structured thinking lenses, decision support, and brainstorming workflows for AI coding agents.",
+      "downloads": 0
+    },
+    "nathancatania-pi-glean": {
+      "name": "@nathancatania/pi-glean",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@nathancatania/pi-glean/-/pi-glean-0.1.1.tgz",
+      "hash": "sha512-zrbSgcKR82R9BJxp3WXS2bWz7/g6TuRqfpkhFhDX1oCyICztw1izYHqmcv9YOCJU5Zzh/nYq07DrCno9F2rm8A==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "glean",
+        "llm"
+      ],
+      "description": "Pi provider for the Glean LLM Gateway.",
+      "downloads": 0
+    },
+    "pi-ccstatusline": {
+      "name": "pi-ccstatusline",
+      "version": "0.1.2",
+      "tarball": "https://registry.npmjs.org/pi-ccstatusline/-/pi-ccstatusline-0.1.2.tgz",
+      "hash": "sha512-eFlfB/lKWALMoiXSnY4JT3rPcQaYWu4q81MCF0Mp6I9+WjUAKj9GC1gruoICIjeNOfriMpztpZzpx7r3yWIFdQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "ccstatusline",
+        "statusline",
+        "footer"
+      ],
+      "description": "Bring your ccstatusline layout to Pi, with Pi-owned settings and live session data.",
+      "downloads": 0
+    },
+    "cx-sources": {
+      "name": "cx-sources",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/cx-sources/-/cx-sources-0.1.1.tgz",
+      "hash": "sha512-AtqkNyciLC+WBr/bHGE0TR9Sv+PuXEkUH7wrnYccF7U1jsCyDiI7W/0esaumLm82LH6Mla6ep31AYMPksSCj4A==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "",
+      "downloads": 0
+    },
+    "sdillen-pi-brave-search": {
+      "name": "@sdillen/pi-brave-search",
+      "version": "0.1.3",
+      "tarball": "https://registry.npmjs.org/@sdillen/pi-brave-search/-/pi-brave-search-0.1.3.tgz",
+      "hash": "sha512-jkI+t2DCBv1HJTWKuCTeN2KavEp67gbThGy4G2c6PqShV3e0v4ilt0HjTXz/gOFvwpCim0unh3pgwVFcbkPGZw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./dist/brave-search.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi",
+        "brave",
+        "search",
+        "web-search"
+      ],
+      "description": "pi extension: web search via the Brave LLM Context API",
+      "downloads": 0
+    },
+    "doubaowork-guide-skill": {
+      "name": "doubaowork-guide-skill",
+      "version": "1.0.0",
+      "tarball": "https://registry.npmjs.org/doubaowork-guide-skill/-/doubaowork-guide-skill-1.0.0.tgz",
+      "hash": "sha512-pcCokNNaiyaynFPQtFyNTXm2C4AMQLWLcy2qYiDy6Hms4eFzRiHyPAOSy9Ub8yGR0yJO45JayEs9gjrR44IfGw==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi",
+        "agent-skill",
+        "skill",
+        "doubao",
+        "doubao-work",
+        "豆包工作",
+        "doubaowork"
+      ],
+      "description": "把《豆包工作蓝皮书》（AlephAITech/DoubaoWorkGuide，MIT，50 篇正文）打包成本地 Agent Skill：SKILL.md 只做意图路由，正文按需加载，附增量同步脚本。",
+      "downloads": 0
+    },
+    "ask-user-more": {
+      "name": "ask-user-more",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/ask-user-more/-/ask-user-more-0.1.0.tgz",
+      "hash": "sha512-zS0MLjhR9sXf1l4vd18GzqZyT70cyLVwzk59W3odDj6HOMig0Wwnmgaasku3xPDqKeXdEK50gyIBCn40I1HvEQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./pi/index.js"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "claude-code-plugin",
+        "ask-user",
+        "mcp",
+        "elicitation"
+      ],
+      "description": "AskUserMore — richer multiple-choice questions for Claude Code",
+      "downloads": 0
+    },
+    "zhenhuang-pi-apply-patch": {
+      "name": "@zhenhuang/pi-apply-patch",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@zhenhuang/pi-apply-patch/-/pi-apply-patch-0.1.1.tgz",
+      "hash": "sha512-BZJxY/L0bjt7y6h0vNhD0LGgrMj8BiStiac+xbAAUKDZk+FJ+59xvmFX0Cnk+ZvVld4rQsdsPUnJwt3bihrcnQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "^1.3.6",
+        "@earendil-works/pi-tui": ">=1.2.0",
+        "@earendil-works/pi-coding-agent": ">=1.2.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "apply-patch",
+        "codex"
+      ],
+      "description": "Codex-style apply_patch for Pi with stable tool registration and native grammar support.",
+      "downloads": 0
+    },
+    "d3vv3-pi-notify": {
+      "name": "@d3vv3/pi-notify",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@d3vv3/pi-notify/-/pi-notify-0.1.1.tgz",
+      "hash": "sha512-4s6fz6ctR7gn1H7gButLUxGdtTJ9RulSUdm0WCeYN9Rnfi2rkuIkmbCCAmAm95yqNIlcs7bpz0tkhs2DGnMSbQ==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {
+        "node-notifier": "^11.0.0"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": ">=1.2.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "notifications"
+      ],
+      "description": "Native desktop notifications for Pi with bundled opencode-notifier sounds",
+      "downloads": 0
+    },
+    "master.g-pi-usage-hud": {
+      "name": "@master.g/pi-usage-hud",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/@master.g/pi-usage-hud/-/pi-usage-hud-0.2.0.tgz",
+      "hash": "sha512-WlfFk5kR077IydQh854yzWrDkwSVpZ0bovUde7A3JEqL3YvvnZyAWyMtxh6fzAzKJaRsB67a4eQhOz0bwyuQqA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-coding-agent",
+        "extension",
+        "usage",
+        "quota",
+        "hud"
+      ],
+      "description": "Persistent pi HUD showing the subscription usage of the current model's provider (Codex, Kimi, Zhipu)",
+      "downloads": 0
+    },
+    "pi-auto-title": {
+      "name": "pi-auto-title",
+      "version": "0.4.0",
+      "tarball": "https://registry.npmjs.org/pi-auto-title/-/pi-auto-title-0.4.0.tgz",
+      "hash": "sha512-3GEffggVzxQc5xNrFBQL9E6qqLvEPuBh+7sbqSC2oXh+xQHMm7BMjJFvOpfWR6C2gySqTPR6w09kDNYi/Qx59g==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/extension.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": ">=1.0.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "session-title"
+      ],
+      "description": "Non-blocking auto-titles for Pi sessions: named after the first turn settles, never in the message path.",
+      "downloads": 0
+    },
+    "justar_96-pi-telecom": {
+      "name": "@justar_96/pi-telecom",
+      "version": "0.5.0",
+      "tarball": "https://registry.npmjs.org/@justar_96/pi-telecom/-/pi-telecom-0.5.0.tgz",
+      "hash": "sha512-WbnpJ+MNbbnA6NQh+yFqgWjREst3Kr/rIF67BSar+MLhoqxDosYh8SwpyekmDJ4a5tF+BHEZZYeQvlR7kTnYZQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "multi-agent",
+        "ipc",
+        "coordination"
+      ],
+      "description": "Telecom for pi: parallel pi agents in the same project see each other, talk, claim work, and get told when a peer changes a file they depend on.",
+      "downloads": 0
+    },
+    "pi-checkpoints": {
+      "name": "pi-checkpoints",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/pi-checkpoints/-/pi-checkpoints-0.1.1.tgz",
+      "hash": "sha512-U0J8wMh+4X6IXT7lmXAfoXLAFAY61s5Wa+c6levPL9HLRMB4r9iGdO5fbzvdd/Qvk2vlr6QrSUSaJIA/4CyaTg==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://raw.githubusercontent.com/Pringled/pi-extensions/main/assets/images/pi-checkpoints-dark.gif",
+        "extensions": [
+          "./extensions/checkpoints.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-coding-agent",
+        "checkpoints",
+        "rewind",
+        "undo"
+      ],
+      "description": "Rewind your files along with the conversation: Pi's /tree and /fork also restore the files Pi edited",
+      "downloads": 0
+    },
+    "pi-response-timer": {
+      "name": "pi-response-timer",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/pi-response-timer/-/pi-response-timer-0.1.1.tgz",
+      "hash": "sha512-fL/pJBO1z1PwQL8md2nD4XB3TBNJh3QdhC1+Oft3cJXjsDxPYnJ1k2kr1d8BHRUikGEENrpoTVXENkCukulMfw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "timer",
+        "timestamp"
+      ],
+      "description": "Live elapsed time and a minimal completion timestamp for Pi's terminal UI.",
+      "downloads": 0
+    },
+    "pi-actor-subagents": {
+      "name": "pi-actor-subagents",
+      "version": "0.1.25",
+      "tarball": "https://registry.npmjs.org/pi-actor-subagents/-/pi-actor-subagents-0.1.25.tgz",
+      "hash": "sha512-RVCVowa5PDArcp4c/kY0M/baK5C6J9Co3YGtUPoObzQzr1KohZbPAD113y885/kbLQI6/EmSR8GjKI9bKAc86Q==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "extensions/actor-subagents/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": ">=1.2.0",
+        "@earendil-works/pi-tui": ">=1.2.0",
+        "@earendil-works/pi-coding-agent": ">=1.2.0"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Run persistent actor-style subagent swarms inside pi.",
+      "downloads": 0
+    },
+    "notrico-pi-fold": {
+      "name": "@notrico/pi-fold",
+      "version": "3.1.0",
+      "tarball": "https://registry.npmjs.org/@notrico/pi-fold/-/pi-fold-3.1.0.tgz",
+      "hash": "sha512-zJDKONMw3EfpzPeVgJygRfBwiaWDzePMXmSTtMECrdN2l5ZSRN9t3iQ9X5rfTNckaqbyQOThtbZQVny4wWPpcg==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "terminal",
+        "tui",
+        "pi-fold",
+        "transcript"
+      ],
+      "description": "Pi Fold: readable agent transcripts with collapsible work, inspectable details, and clear final replies",
+      "downloads": 0
+    },
+    "oai404iao-pi-codex-tools": {
+      "name": "@oai404iao/pi-codex-tools",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@oai404iao/pi-codex-tools/-/pi-codex-tools-0.1.1.tgz",
+      "hash": "sha512-PfL+YcgRRjZa5mzHQAhLkb97QeGOEbcbZe+EUp8f1sW3u3wPGtCwRlLb1Gfslllc3gsEZisbdGh8rXI/aBwsoA==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {
+        "@silvia-odwyer/photon-node": "0.3.4",
+        "@oai404iao/pi-codex-runtime": "3.0.1"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": ">=1.2.0",
+        "@earendil-works/pi-tui": ">=1.2.0",
+        "@earendil-works/pi-coding-agent": ">=1.2.0"
+      },
+      "keywords": [
+        "pi-package",
+        "codex"
+      ],
+      "description": "Codex patch, web search and image-generation tools for Pi",
+      "downloads": 0
+    },
+    "finngi-pi-delegation": {
+      "name": "@finngi/pi-delegation",
+      "version": "0.1.0-alpha.0",
+      "tarball": "https://registry.npmjs.org/@finngi/pi-delegation/-/pi-delegation-0.1.0-alpha.0.tgz",
+      "hash": "sha512-pKI6JtkemH41fxWfgdfT/SS2CsX2rHUKFBYbw3RVC9WKVWJCLf4X0YuufUZ0aOua6fH3dxYttS/4vVG1gH5Sbw==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./node_modules/pi-delegation/dist/extensions/subagent.js"
+        ]
+      },
+      "dependencies": {
+        "pi-delegation": "0.1.0"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Pi agent discovery, delegation and communication",
+      "downloads": 0
+    },
+    "pi-sgrep": {
+      "name": "pi-sgrep",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/pi-sgrep/-/pi-sgrep-0.1.0.tgz",
+      "hash": "sha512-zp60yDlXjf15CAnvbLqXO2MhblNTNSoSyZoOs83aPtdyOWI70Y8HlJL5G2wA/6veVYpaHmUKDP8qv9KqtdIGDg==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi",
+        "pi-package",
+        "pi-extension",
+        "sgrep",
+        "search",
+        "semantic-search",
+        "code-retrieval",
+        "ai-agent"
+      ],
+      "description": "pi extension: sgrep-powered semantic code search (plain-English retrieval over a local index)",
+      "downloads": 0
+    },
+    "pi-agent-api": {
+      "name": "pi-agent-api",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/pi-agent-api/-/pi-agent-api-0.1.0.tgz",
+      "hash": "sha512-+1phLDe3xJeTSBkTJhkLfyVY5buRmAA2fhHNd8gx3iytK4lKaPHuWE5fT9AeeTnm1Vgu7ZtFR1jXazJjFPkBqA==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./src/extension.ts"
+        ]
+      },
+      "dependencies": {
+        "fastify": "5.12.7",
+        "proper-lockfile": "4.1.2",
+        "@fastify/multipart": "10.1.4"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "http",
+        "api",
+        "chat",
+        "file-upload",
+        "systemd",
+        "launchd"
+      ],
+      "description": "Pi extension for synchronous HTTP chat, file attachments, model selection, and systemd/launchd background services",
+      "downloads": 0
+    },
+    "pasarus-pi-vertex": {
+      "name": "@pasarus/pi-vertex",
+      "version": "2.1.4",
+      "tarball": "https://registry.npmjs.org/@pasarus/pi-vertex/-/pi-vertex-2.1.4.tgz",
+      "hash": "sha512-R/ddfSYzGTjy+TQmH+p/oegOREPWVvTmccdiiaSGa+g2mqVTpTRL4GrW5U+C60nCZp5DoQxs5zqlOS16RNDWHw==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {
+        "@google/genai": "^1.42.0",
+        "google-auth-library": "^11.0.0",
+        "@anthropic-ai/vertex-sdk": "^0.14.4"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "vertex-ai",
+        "gemini",
+        "claude",
+        "maas"
+      ],
+      "description": "Google Vertex AI provider for Pi coding agent with dynamic model discovery",
+      "downloads": 0
+    },
+    "pi-flow-memory-gate": {
+      "name": "pi-flow-memory-gate",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/pi-flow-memory-gate/-/pi-flow-memory-gate-0.1.0.tgz",
+      "hash": "sha512-jmcAQB85GpFJpcZ05+K35T4uRogItdRMlw49mNQ4Zl+d3SRV+6RyDRpCUDtnuhySzuKjIa4EHb3c7iadaCtluA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "memory",
+        "decision-model",
+        "agent-memory"
+      ],
+      "description": "Memory gate for Pi: a local decision model decides what is worth remembering, you approve. Additive to pi-hermes-memory.",
+      "downloads": 0
+    },
+    "pi-ws-recovery": {
+      "name": "pi-ws-recovery",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/pi-ws-recovery/-/pi-ws-recovery-0.1.0.tgz",
+      "hash": "sha512-XNWp+rjN0HJX2SrGw3KGa17FlhBlbwbQqWopFjxCjldUc0ffdStjHvjsPecYdgciASJ2c8P65YVi7mdmh8TXBg==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": ">=1.1.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "websocket",
+        "sse",
+        "fallback",
+        "pi-coding-agent",
+        "openai",
+        "codex"
+      ],
+      "description": "WebSocket→SSE fallback indicator and automatic WebSocket recovery for Pi's OpenAI Codex provider",
+      "downloads": 0
+    },
+    "pi-cached-compaction": {
+      "name": "pi-cached-compaction",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/pi-cached-compaction/-/pi-cached-compaction-0.2.0.tgz",
+      "hash": "sha512-7qfTz6u1VQi3GdQDS7+i0Pc+vYiGXUO0emvpqmJq9P5f683fztend5hRqlgaevbbiJ2G3OKJox1XxDAlpDlNPA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": ">=0.87.0",
+        "@earendil-works/pi-tui": ">=0.87.0",
+        "@earendil-works/pi-agent-core": ">=0.87.0",
+        "@earendil-works/pi-coding-agent": ">=0.87.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "coding-agent",
+        "compaction",
+        "prompt-cache",
+        "extension"
+      ],
+      "description": "Pi compaction that reads the conversation's prompt cache instead of paying full input price",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-subagents": {
+      "name": "@gang-of-beads/pi-subagents",
+      "version": "0.77.1",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-subagents/-/pi-subagents-0.77.1.tgz",
+      "hash": "sha512-b7SQLh6sfUAKJSF1U07BDRop2Z3rGs0FQJmbhYQskiFavYFQJLHYd723EgcHMk1qc7mrPOYlCtud/2IAZNurpw==",
+      "tier": "B",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ],
+        "prompts": [
+          "./prompts"
+        ],
+        "extensions": [
+          "./index.js"
+        ]
+      },
+      "dependencies": {
+        "jiti": "2.7.0",
+        "yaml": "2.8.3",
+        "acorn": "8.18.0",
+        "undici": "8.10.2",
+        "@js-temporal/polyfill": "0.5.1"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-ai": ">=0.86.1",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-coding-agent",
+        "extension",
+        "subagents",
+        "ai",
+        "agents",
+        "cli"
+      ],
+      "description": "Pi extension for single-agent delegation and scripted multi-agent workflows",
+      "downloads": 0
+    },
+    "shelken-pi-sounds": {
+      "name": "@shelken/pi-sounds",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/@shelken/pi-sounds/-/pi-sounds-0.1.0.tgz",
+      "hash": "sha512-WwoaBLVB0RJclFLzHq5XWxyVSo1o4mXItu7ezAjKPmPkTbTyml/ZmrYqtPrpizgk6lHavYfDaEpfvvDymhLObw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "sound",
+        "notification",
+        "audio",
+        "jingle"
+      ],
+      "description": "Agent 任务完成/事件提示音扩展，内置轻量提示音，开箱即用，支持 macOS afplay 原生播放与自定义配置",
+      "downloads": 0
+    },
+    "wa-orchestrator": {
+      "name": "wa-orchestrator",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/wa-orchestrator/-/wa-orchestrator-0.1.0.tgz",
+      "hash": "sha512-GGO+kssXeg/qnFDzitg7mrnhIhOjno0EUYDHSy+mbq1lxfvsAqXQXUavNoZazsK25/9poY1XwRSCLvkEtGFZKg==",
+      "tier": "B",
+      "piManifest": {
+        "skills": [
+          "skills/wa-orchestrator"
+        ]
+      },
+      "dependencies": {
+        "qrcode": "^1.5.4",
+        "qrcode-terminal": "^0.12.0",
+        "whatsapp-web.js": "^1.34.7"
+      },
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi",
+        "whatsapp",
+        "wwebjs",
+        "bot",
+        "orchestrator",
+        "docker"
+      ],
+      "description": "Multi-group WhatsApp orchestrator: one process, one WhatsApp account, N groups, one pi-agent brain per group (docker-sandboxed).",
+      "downloads": 0
+    },
+    "pi-async": {
+      "name": "pi-async",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/pi-async/-/pi-async-0.2.0.tgz",
+      "hash": "sha512-p9kgzi+X/yeiVgCtkaKkNqlx5IwCg9ux2kX8fzpDKAfJ7SxJvEBg3y2LOd5pJofezXf01A77uSpKLyJFNndGmQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./extensions/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "^1.2.0",
+        "@earendil-works/pi-coding-agent": "^1.2.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi",
+        "coding-agent",
+        "async",
+        "background-tasks",
+        "task-manager",
+        "shell",
+        "watch",
+        "delayed",
+        "pi-legion"
+      ],
+      "description": "Pi extension for async shell tasks: background/delayed/sync modes, output-matching watches, event-driven waiting, settle guard for legion children, and a TUI task rail — completion notifications wake your session.",
+      "downloads": 0
+    },
+    "pi-session-join": {
+      "name": "pi-session-join",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/pi-session-join/-/pi-session-join-0.1.0.tgz",
+      "hash": "sha512-NzFqHyKEQ8sIGnTm06xCTTAL/KVq4W0f/U2nBT+XLSrMw1qm54f17olTsLcf4bonZ15Q/3Md3CBCZMiFE0jqfQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./extensions/session-join/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi-coding-agent",
+        "session",
+        "fork",
+        "merge"
+      ],
+      "description": "Pi extension: merge forked sessions back into the parent session via summarization (/join)",
+      "downloads": 0
+    },
+    "qusic-pi-dynamic-mcp": {
+      "name": "@qusic/pi-dynamic-mcp",
+      "version": "0.20261016.0",
+      "tarball": "https://registry.npmjs.org/@qusic/pi-dynamic-mcp/-/pi-dynamic-mcp-0.20261016.0.tgz",
+      "hash": "sha512-Yewz2JnFkBMNlFDDk4kZxsOZA83zdWacbLUnp4xJ0BY1lzLR7p/NISRhKLyoQENeU9gMMEH0eXeky/clmf3gQQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./*.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi",
+        "pi-coding-agent",
+        "mcp",
+        "model-context-protocol",
+        "dynamic-mcp",
+        "session-scoped",
+        "stdio",
+        "streamable-http"
+      ],
+      "description": "Dynamically manage MCP servers for the current Pi session.",
+      "downloads": 0
+    },
+    "pi-searlo": {
+      "name": "pi-searlo",
+      "version": "0.1.5",
+      "tarball": "https://registry.npmjs.org/pi-searlo/-/pi-searlo-0.1.5.tgz",
+      "hash": "sha512-iC7KmzKg3UnS9zSBhIqZbzlXmkepSf0V6hATtFn3/X4Erf+yBQ3xQk7Q+H0Xy0oB1gpu2wm/4npKwfsvhWrkcQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "search",
+        "searlo",
+        "web"
+      ],
+      "description": "Perplexity-style fresh web data for pi, backed by the Searlo search API",
+      "downloads": 0
+    },
+    "finngi-pi-resources": {
+      "name": "@finngi/pi-resources",
+      "version": "0.1.0-alpha.0",
+      "tarball": "https://registry.npmjs.org/@finngi/pi-resources/-/pi-resources-0.1.0-alpha.0.tgz",
+      "hash": "sha512-6HChEgWCBoZ9KwdLvlAnXUgCQJMH0/qlArtTVqyVn31JJWYUere3Im/rEzgTHmci+kl+0qj2RwQf65L6/0I3Aw==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./node_modules/pi-resources/dist/extensions/resources.js"
+        ]
+      },
+      "dependencies": {
+        "pi-resources": "0.1.0"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Session selection of native skills and package guidance for Pi",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-web-themes": {
+      "name": "@gang-of-beads/pi-web-themes",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-web-themes/-/pi-web-themes-0.1.1.tgz",
+      "hash": "sha512-fRGKVwsM3zeH8jc0UlLrMofAT6lhdLlM/CMNr0UEChw/A7ccJQlyLCwOqQxZxp2Bpk2cTI32Kn3dbXKy7Dn6sw==",
+      "tier": "A",
+      "piManifest": {},
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi-web",
+        "pi-web-plugin",
+        "themes"
+      ],
+      "description": "More themes for PI WEB: Pro, PI WEB and Clay light/dark pairs, plus Classic, Night, Paper and High Contrast.",
+      "downloads": 0
+    },
+    "finngi-pi-background": {
+      "name": "@finngi/pi-background",
+      "version": "0.1.0-alpha.0",
+      "tarball": "https://registry.npmjs.org/@finngi/pi-background/-/pi-background-0.1.0-alpha.0.tgz",
+      "hash": "sha512-06/B8phZgdcCdfhyoSrvD0UNHwsvuAR1MOvIGVfjRCcmPDr7b14hRtCTipLeJgCDn4r80S67vBdb015zDxvDZQ==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./node_modules/pi-background/dist/extensions/background-process.js"
+        ]
+      },
+      "dependencies": {
+        "pi-background": "0.1.0"
+      },
+      "peerDependencies": {
+        "typebox": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Managed Bash and session-owned background processes for Pi",
+      "downloads": 0
+    },
+    "pi-sub2api-usage": {
+      "name": "pi-sub2api-usage",
+      "version": "0.4.0",
+      "tarball": "https://registry.npmjs.org/pi-sub2api-usage/-/pi-sub2api-usage-0.4.0.tgz",
+      "hash": "sha512-JGH/kj4uZ1yuYMCZddGn8IwRGR8Z4d8CbpVzXXlxRDiEvfTWE270otIEwj+HvVktslkjSZCrlLa2LuqpkbzHfQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-tui": ">=0.74.0",
+        "@earendil-works/pi-coding-agent": ">=0.83.0"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Show the current sub2api site's balance and today's actual spend in the Pi footer (read-only)",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-updater": {
+      "name": "@gang-of-beads/pi-updater",
+      "version": "0.6.0",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-updater/-/pi-updater-0.6.0.tgz",
+      "hash": "sha512-PkUAe7D+VtyVOuXsNIFJUViDfRDy/l6p1TT7349uYzYJvqSiWY3AzSiqkSWAZKiKD2V9TesJQ+6rRnbxNo0q6g==",
+      "tier": "A",
+      "piManifest": {
+        "image": "https://github.com/user-attachments/assets/b34ca10f-1baf-4f4c-9f14-414a5b814112",
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "update"
+      ],
+      "description": "Codex-style auto-updater for pi. Checks pi and extension packages on startup and prompts to install updates.",
+      "downloads": 0
+    },
+    "djoeyg-pi-review": {
+      "name": "@djoeyg/pi-review",
+      "version": "0.1.0",
+      "tarball": "https://registry.npmjs.org/@djoeyg/pi-review/-/pi-review-0.1.0.tgz",
+      "hash": "sha512-fh4zJNUKA/ViodA0rzh3u0Md4flHpZNPyciuI5dhzCW/bSAt5wmVPOfSdXtobWgCHzDvcERq2wiwT6oTvT3TOA==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./src/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "code-review",
+        "subagent"
+      ],
+      "description": "request_review / steer_review: background code review by an independent, steerable reviewer model",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-web-workflows": {
+      "name": "@gang-of-beads/pi-web-workflows",
+      "version": "0.1.1",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-web-workflows/-/pi-web-workflows-0.1.1.tgz",
+      "hash": "sha512-6Vtrqg4mwQJrjFxrHTIPOAmU85X8GmrqNPIzifp9w0cU6TbItS04oAbB04Epjg1F7IGZC59IaLpoKAygVyXvHg==",
+      "tier": "A",
+      "piManifest": {},
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi-web",
+        "pi-web-plugin",
+        "pi-dynamic-workflows"
+      ],
+      "description": "PI WEB plugin that draws the pi-dynamic-workflows `workflow` tool as a live progress card.",
+      "downloads": 0
+    },
+    "tallshort-pi-inclusive-cost": {
+      "name": "@tallshort/pi-inclusive-cost",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/@tallshort/pi-inclusive-cost/-/pi-inclusive-cost-0.2.0.tgz",
+      "hash": "sha512-9Wis5mA5fhJBIjckil5g+U9Pgc3Ibin33HVn6qLnfFyekJfWMYrBs32RiZjbdP3rdHc8NHiSZC/g87WqOLX4KQ==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./inclusive-cost.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi-extension",
+        "pi",
+        "cost",
+        "usage",
+        "subagents",
+        "statusline"
+      ],
+      "description": "Pi extension that shows inclusive cost for the current session, including supported subagents and delegated workflows, not just the main thread",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-web-goals": {
+      "name": "@gang-of-beads/pi-web-goals",
+      "version": "0.1.2",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-web-goals/-/pi-web-goals-0.1.2.tgz",
+      "hash": "sha512-swiVfmy7AeOtDI5cGEykrCG8NVusPrf5cD/tX6FFmtxOebfROwqYHngXHcY4lvRaGYuU1Qx4KdoQfSoRWvabqg==",
+      "tier": "A",
+      "piManifest": {},
+      "dependencies": {},
+      "peerDependencies": {},
+      "keywords": [
+        "pi-package",
+        "pi-web",
+        "pi-web-plugin",
+        "pi-goal"
+      ],
+      "description": "PI WEB plugin for pi-goal: a Goals tab listing the project's goals with their status and task progress, and short rows for goal events in the conversation.",
+      "downloads": 0
+    },
+    "finngi-pi-permissions": {
+      "name": "@finngi/pi-permissions",
+      "version": "0.1.0-alpha.0",
+      "tarball": "https://registry.npmjs.org/@finngi/pi-permissions/-/pi-permissions-0.1.0-alpha.0.tgz",
+      "hash": "sha512-PQFF2Npu6j6D3PwXCtoVuaX7iTQEdspv6ZgyhYDDkhGN8nlofKYdG3YFOEXu2aZFnGBOLEHVzt89v1Ae33eopA==",
+      "tier": "B",
+      "piManifest": {
+        "extensions": [
+          "./node_modules/pi-permissions/dist/extensions/permissions.js"
+        ]
+      },
+      "dependencies": {
+        "pi-permissions": "0.1.0"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Approve Pi tool calls by rule, by asking you, or with a classifier model",
+      "downloads": 0
+    },
+    "finngi-pi-context": {
+      "name": "@finngi/pi-context",
+      "version": "0.1.0-alpha.0",
+      "tarball": "https://registry.npmjs.org/@finngi/pi-context/-/pi-context-0.1.0-alpha.0.tgz",
+      "hash": "sha512-l0ChTzqczL+Q9X10lUQiCozp/zlc4EXRYGvTYtmanfJEmAp9ueGD+CNnQMJdHmb4oaZwOTWdGYiPzIRhX4PS3g==",
+      "tier": "B",
+      "piManifest": {
+        "skills": [
+          "./node_modules/pi-context/skills"
+        ],
+        "extensions": [
+          "./node_modules/pi-context/dist/extensions/context.js"
+        ]
+      },
+      "dependencies": {
+        "pi-context": "0.1.0"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package"
+      ],
+      "description": "Project context overlays and selected session instructions for Pi",
+      "downloads": 0
+    },
+    "gang-of-beads-pi-ask-user": {
+      "name": "@gang-of-beads/pi-ask-user",
+      "version": "0.16.1",
+      "tarball": "https://registry.npmjs.org/@gang-of-beads/pi-ask-user/-/pi-ask-user-0.16.1.tgz",
+      "hash": "sha512-/r0lU+glG0X/7MsZwvi9yXBJzTdlWhXLVrirANP2a/zz3hqNoTAioc5QB0PDoaaZ4Gt4xHMdx3n+opRLRvlpmw==",
+      "tier": "A",
+      "piManifest": {
+        "skills": [
+          "./skills"
+        ],
+        "extensions": [
+          "./index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@sinclair/typebox": "*",
+        "@earendil-works/pi-tui": ">=0.74.0",
+        "@earendil-works/pi-coding-agent": ">=0.74.0"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-coding-agent",
+        "extension",
+        "ask",
+        "ask_user",
+        "interactive"
+      ],
+      "description": "Interactive ask_user tool for pi-coding-agent with searchable split-pane selection UI, multi-select, and freeform input",
+      "downloads": 0
+    },
+    "pi-lithosai": {
+      "name": "pi-lithosai",
+      "version": "0.1.2",
+      "tarball": "https://registry.npmjs.org/pi-lithosai/-/pi-lithosai-0.1.2.tgz",
+      "hash": "sha512-tfZJPNzsZOw7KtMeWOql58uRHsSlQGvtz9VJxZ8myVLN2Gl2Sda/rr1tIbQ8W1HJc9nTNdF6n7Kr+IHXytsCiw==",
+      "tier": "A",
+      "piManifest": {
+        "extensions": [
+          "./extensions/provider/index.ts"
+        ]
+      },
+      "dependencies": {},
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*"
+      },
+      "keywords": [
+        "pi-package",
+        "pi",
+        "pi-extension",
+        "lithosai",
+        "llm",
+        "provider",
+        "openai-compatible"
+      ],
+      "description": "LithosAI model provider for Pi",
+      "downloads": 0
     }
   }
 }
