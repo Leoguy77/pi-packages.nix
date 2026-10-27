@@ -14,12 +14,38 @@
 
 let
   tierA = tier == "A" || dependencies == {};
-  
+
   tarballSrc = pkgs.fetchurl {
     url = tarball;
     inherit hash;
   };
-  
+
+  # Host-provided packages that pi itself supplies to every extension. A PHYSICAL
+  # copy baked into a package's node_modules makes pi warn ("duplicate runtime
+  # modules") because it can bypass the extension loader's module mapping. On a
+  # normal `pi install`, npm hoists these to pi's shared tree so they resolve to
+  # pi's copies; here we strip the bundled copies so the same resolution happens.
+  # Ref: pi docs packages.md "Pi supplies these packages to extensions and skills".
+  hostProvidedDeps = [
+    "typebox"
+    "@earendil-works/pi-ai"
+    "@earendil-works/pi-agent-core"
+    "@earendil-works/pi-coding-agent"
+    "@earendil-works/pi-tui"
+  ];
+  # Emit `rm -rf $out/<rel-path>` for each host-provided dir (both the top-level
+  # copy and any nested copy under a real dependency's node_modules, where npm may
+  # also place a duplicate).
+  stripScript = builtins.concatStringsSep "\n" (builtins.concatLists (map (d: [
+    "rm -rf $out/node_modules/${d} 2>/dev/null || true"
+    "find $out/node_modules -type d -path '*/node_modules/${d}' -prune -exec rm -rf {} + 2>/dev/null || true"
+  ]) hostProvidedDeps)) + ''
+  # Remove .bin symlinks whose target was stripped, so `noBrokenSymlinks` passes.
+  for b in $out/node_modules/.bin/*; do
+    [ -e "$b" ] || rm -f "$b" 2>/dev/null || true
+  done
+'';
+
 in if tierA then
   
   pkgs.runCommand "pi-pkg-${name}" { nativeBuildInputs = [ pkgs.gnutar ]; } ''
@@ -67,6 +93,8 @@ else
       mkdir -p $out
       cp -r . $out/
       rm -rf $out/node_modules/.cache 2>/dev/null || true
+      # Strip host-provided packages so pi resolves its own copies (no duplicate-module warning).
+      ${stripScript}
     '';
   } else pkgs.stdenv.mkDerivation {
     pname = "pi-pkg-${name}";
@@ -94,5 +122,7 @@ else
     installPhase = ''
       mkdir -p $out
       cp -r . $out/
+      # Strip host-provided packages so pi resolves its own copies (no duplicate-module warning).
+      ${stripScript}
     '';
   }
