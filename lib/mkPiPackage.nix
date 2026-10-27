@@ -9,7 +9,10 @@
 
 { pkgs, lib }:
 
-{ name, tarball, hash, tier, packagesDir
+# `name` = registry entry's npm name (used for the output pname).
+# `key`  = the sanitized registry KEY, which is also the directory name under
+#          packages/ where the generated package-lock.json lives.
+{ name, key, tarball, hash, tier, packagesDir
 , version ? "0.0.0", dependencies ? {}, npmDepsHash ? null, ... }:
 
 let
@@ -56,7 +59,7 @@ in if tierA then
 else
   
   let
-    lockPath = packagesDir + "/${name}/package-lock.json";
+    lockPath = packagesDir + "/${key}/package-lock.json";
     hasLock = builtins.pathExists lockPath;
     
     # Merge lockfile into src to avoid store path refs in npmDeps sub-derivation

@@ -21,10 +21,15 @@
       safeName = name: builtins.replaceStrings ["."] ["_"] name;
 
       # Build a single package given pkgs and a registry entry
+      # `name` here is the registry KEY, which is also the packages/<dir> where
+      # the generated lockfile lives. Pass it as `key` so mkPiPackage resolves the
+      # lockfile path; entry.name (npm name) is still used for the output pname.
+      # Previously mkPiPackage used the npm name for the lockfile path, so hasLock
+      # was false for ~2370 packages, silently routing them to the slow /
+      # network-dependent inline-npm build branch.
       buildOne = pkgs: name: entry:
         nixpkgs.lib.nameValuePair "pi-${safeName name}"
-          ((mkPiPackage { inherit pkgs; lib = nixpkgs.lib; }) (entry // { inherit packagesDir; }));
-      
+          ((mkPiPackage { inherit pkgs; lib = nixpkgs.lib; }) (entry // { inherit packagesDir; key = name; }));
       # Build all packages for a system
       buildPackages = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name) registry.packages;
