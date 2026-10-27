@@ -36,6 +36,16 @@ let
     "@earendil-works/pi-coding-agent"
     "@earendil-works/pi-tui"
   ];
+  # Rewrite package.json so host-provided deps are declared in peerDependencies
+  # ("*") instead of dependencies. pi checks the MANIFEST and warns if these are
+  # in `dependencies` ("Installed copies can bypass the extension loader and
+  # create duplicate runtime modules"). Moving them to peerDependencies tells pi
+  # they are resolved from pi's own shared copies. Uses a small node script.
+  fixPkgJson = ''
+    PKG="$out/package.json"
+    ${pkgs.nodejs}/bin/node \
+      --input-type=commonjs -e 'const fs=require("fs");const p=process.argv[1];const j=JSON.parse(fs.readFileSync(p));const host=["typebox","@earendil-works/pi-ai","@earendil-works/pi-agent-core","@earendil-works/pi-coding-agent","@earendil-works/pi-tui"];let changed=false;for(const d of host){if(j.dependencies&&j.dependencies[d]){j.peerDependencies=j.peerDependencies||{};j.peerDependencies[d]="*";delete j.dependencies[d];changed=true;}}if(j.dependencies&&Object.keys(j.dependencies).length===0)delete j.dependencies;if(changed)fs.writeFileSync(p,JSON.stringify(j,null,2));' "$PKG"
+  '';
   # Emit `rm -rf $out/<rel-path>` for each host-provided dir (both the top-level
   # copy and any nested copy under a real dependency's node_modules, where npm may
   # also place a duplicate).
@@ -96,7 +106,9 @@ else
       mkdir -p $out
       cp -r . $out/
       rm -rf $out/node_modules/.cache 2>/dev/null || true
-      # Strip host-provided packages so pi resolves its own copies (no duplicate-module warning).
+      # Move host-provided deps to peerDependencies + strip their copies so pi
+      # resolves its own (no duplicate-module warnings).
+      ${fixPkgJson}
       ${stripScript}
     '';
   } else pkgs.stdenv.mkDerivation {
@@ -125,7 +137,9 @@ else
     installPhase = ''
       mkdir -p $out
       cp -r . $out/
-      # Strip host-provided packages so pi resolves its own copies (no duplicate-module warning).
+      # Move host-provided deps to peerDependencies + strip their copies so pi
+      # resolves its own (no duplicate-module warnings).
+      ${fixPkgJson}
       ${stripScript}
     '';
   }
