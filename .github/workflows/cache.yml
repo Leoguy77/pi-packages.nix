@@ -63,7 +63,7 @@ jobs:
 
             // Get ALL outPaths in ONE eval (single flake eval, fast)
             const allOut = JSON.parse(
-              spawnSync('nix',['eval','--json','--apply','x: builtins.mapAttrs (n: v: v.outPath) x','.#packages.x86_64-linux'],{timeout:300000}).stdout.toString()
+              spawnSync('nix',['eval','--json','--apply','x: builtins.mapAttrs (n: v: v.outPath) x','.#packages.x86_64-linux'],{timeout:300000,maxBuffer:16*1024*1024}).stdout.toString()
             );
 
             // Filter to packages NOT in Attic
