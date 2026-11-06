@@ -86,7 +86,7 @@ Without the cache, Tier B packages build from source (deterministic, but takes a
 
 ## Available Packages
 
-**12,811 packages** — see [`registry/registry.json`](./registry/registry.json) for the full list.
+**12,915 packages** — see [`registry/registry.json`](./registry/registry.json) for the full list.
 
 ### Tiers
 
@@ -284,14 +284,14 @@ Key optimizations:
 
 | Metric | Count |
 | -------- | ------- |
-| Total packages | 12,811 |
-| Tier A (zero deps, direct unpack) | 8,633 |
-| Tier B (has npm deps) | 4,178 |
-| With lockfile (`buildNpmPackage`, cached) | 3,999 |
-| Fallback (`stdenv.mkDerivation`, needs network) | 179 |
+| Total packages | 12,915 |
+| Tier A (zero deps, direct unpack) | 8,705 |
+| Tier B (has npm deps) | 4,210 |
+| With lockfile (`buildNpmPackage`, cached) | 4,028 |
+| Fallback (`stdenv.mkDerivation`, needs network) | 182 |
 | Tier B with `npmDepsHash` computed | 1,867 |
 
-The 179 fallback packages have genuinely unresolvable npm dep trees (private scoped packages, git dependencies, yanked packages on npm).
+The 182 fallback packages have genuinely unresolvable npm dep trees (private scoped packages, git dependencies, yanked packages on npm).
 
 ---
 
