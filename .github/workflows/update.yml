@@ -33,6 +33,7 @@ jobs:
         run: node registry/generate.mjs
         env:
           REGISTRY_ONLY: '1'
+          REFRESH_STALE: '1'
           CONCURRENCY: '4'
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs

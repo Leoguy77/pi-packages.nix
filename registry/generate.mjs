@@ -9,6 +9,15 @@ import { join } from 'path';
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
 const REGISTRY_ONLY = process.env.REGISTRY_ONLY === '1';
 const LOCKS_ONLY = process.env.LOCKS_ONLY === '1';
+// Refresh existing entries instead of only adding new ones. Two modes:
+//   REFRESH_KEYS="a,b"  re-crawl just these registry keys and exit.
+//   REFRESH_STALE=1     during a normal crawl, re-crawl any entry whose stored
+//                       version differs from the version npm's search index
+//                       just returned. Costs no extra requests: search results
+//                       already carry the current version.
+const REFRESH_KEYS = (process.env.REFRESH_KEYS || '')
+  .split(/[ ,]+/).map(s => s.trim()).filter(Boolean);
+const REFRESH_STALE = process.env.REFRESH_STALE === '1';
 const SEARCH_URL = 'https://registry.npmjs.org/-/v1/search';
 const PAGE_SIZE = 250;
 const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
@@ -238,6 +247,41 @@ async function main() {
   const existing = existsSync(REGISTRY_PATH) ? JSON.parse(readFileSync(REGISTRY_PATH, 'utf8')) : { packages: {} };
   const packages = existing.packages || {};
   
+  if (REFRESH_KEYS.length > 0) {
+    let updated = 0;
+    for (const key of REFRESH_KEYS) {
+      const entry = packages[key];
+      if (!entry) {
+        process.stderr.write(`  skip ${key}: not in registry\n`);
+        continue;
+      }
+      try {
+        const meta = await getPackageMetadata(entry.name);
+        if (!meta) {
+          process.stderr.write(`  skip ${key}: no npm metadata\n`);
+          continue;
+        }
+        if (meta.version === entry.version) {
+          process.stderr.write(`  ${key}: already at ${entry.version}\n`);
+          continue;
+        }
+        process.stderr.write(`  ${key}: ${entry.version} -> ${meta.version}\n`);
+        // Keep npmDepsHash only while the dependency set is unchanged; a bump
+        // can change deps, and a stale hash would build the wrong tree.
+        const depsUnchanged =
+          JSON.stringify(entry.dependencies || {}) === JSON.stringify(meta.dependencies || {});
+        if (depsUnchanged && entry.npmDepsHash) meta.npmDepsHash = entry.npmDepsHash;
+        packages[key] = meta;
+        updated++;
+      } catch (err) {
+        process.stderr.write(`  error ${key}: ${err.message}\n`);
+      }
+    }
+    writeFileSync(REGISTRY_PATH, JSON.stringify({ packages }, null, 2) + '\n');
+    process.stderr.write(`Refreshed ${updated} of ${REFRESH_KEYS.length} key(s)\n`);
+    return;
+  }
+
   if (LOCKS_ONLY) {
     const tierB = Object.entries(packages).filter(([_, e]) => e.tier === 'B');
     process.stderr.write(`Generating lockfiles for ${tierB.length} Tier B packages...\n`);
@@ -284,8 +328,16 @@ async function main() {
       }
       
       if (processed.has(key)) {
-        process.stderr.write(`[${fetched}/${objects.length}] ${name} (cached)\n`);
-        return;
+        const stored = packages[key];
+        const latest = obj.package?.version;
+        if (REFRESH_STALE && stored && latest && stored.version !== latest) {
+          process.stderr.write(
+            `[${fetched}/${objects.length}] ${name} (stale ${stored.version} -> ${latest})\n`
+          );
+        } else {
+          process.stderr.write(`[${fetched}/${objects.length}] ${name} (cached)\n`);
+          return;
+        }
       }
       
       process.stderr.write(`[${fetched}/${objects.length}] ${name}\n`);
