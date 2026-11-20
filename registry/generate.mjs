@@ -14,6 +14,11 @@ const LOCKS_ONLY = process.env.LOCKS_ONLY === '1';
 // whatever it was the first time the crawler saw it (see git history: every daily
 // commit added new keys and bumped zero existing ones).
 const REFRESH = process.env.REFRESH === '1';
+// PACKAGES=a,b,c limits a REFRESH run to the named registry keys, so the refresh path
+// can be validated (and a specific set of installs updated) before the full sweep.
+const ONLY = (process.env.PACKAGES || '').split(',').filter(Boolean);
+// Packages provided by the pi host at runtime, never installed from npm.
+const HOST_DEPS = ["typebox","@earendil-works/pi-ai","@earendil-works/pi-agent-core","@earendil-works/pi-coding-agent","@earendil-works/pi-tui"];
 const SEARCH_URL = 'https://registry.npmjs.org/-/v1/search';
 const PAGE_SIZE = 250;
 const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
@@ -162,6 +167,28 @@ async function generateLockfile(name, tarballUrl, key) {
       }
     }
     await runNpmLock(workDir);
+    
+    // Pi packages declare the host (pi itself) as peerDependencies. When they are not
+    // marked optional, `npm ci` inside buildNpmPackage demands them in the fixed-output
+    // derivation and fails with ENOTCACHED (@earendil-works/pi-ai). Mark every host peer
+    // optional in the lockfile so the build treats them as provided by the runtime.
+    const lockFile = join(workDir, 'pkg', 'package-lock.json');
+    if (existsSync(lockFile)) {
+      const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
+      const rootPkg = lock.packages?.[''];
+      if (rootPkg?.peerDependencies) {
+        const hostPeers = HOST_DEPS.filter((d) => d in rootPkg.peerDependencies);
+        if (hostPeers.length) {
+          rootPkg.peerDependenciesMeta = rootPkg.peerDependenciesMeta || {};
+          for (const d of hostPeers) {
+            rootPkg.peerDependenciesMeta[d] = { ...(rootPkg.peerDependenciesMeta[d] || {}), optional: true };
+          }
+          writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
+          process.stderr.write(`  marked host peers optional: ${hostPeers.join(', ')}\n`);
+        }
+      }
+    }
+    
     if (existsSync(join(workDir, 'pkg', 'package-lock.json'))) {
       mkdirSync(pkgDir, { recursive: true });
       writeFileSync(lockPath, readFileSync(join(workDir, 'pkg', 'package-lock.json')));
@@ -312,6 +339,8 @@ async function main() {
       // Refresh mode: the search hit already carries the published version, so a
       // package whose version did not move needs no metadata fetch at all. This is
       // what keeps a full refresh at minutes instead of an hour of 250ms waits.
+      if (ONLY.length && !ONLY.includes(key)) return;
+      
       const cachedVersion = packages[key]?.version;
       if (REFRESH && cachedVersion && obj.package?.version === cachedVersion) {
         process.stderr.write(`[${fetched}/${objects.length}] ${name} (up to date)\n`);

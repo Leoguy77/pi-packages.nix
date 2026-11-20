@@ -74,11 +74,30 @@ else
     
     # Merge lockfile into src to avoid store path refs in npmDeps sub-derivation
     src = if hasLock then pkgs.runCommand "src-${name}" {
-      nativeBuildInputs = [ pkgs.gnutar ];
+      nativeBuildInputs = [ pkgs.gnutar pkgs.nodejs ];
     } ''
       mkdir -p $out
       tar -xzf ${tarballSrc} --strip-components=1 -C $out
       cp ${lockPath} $out/package-lock.json
+      # npm ci fails offline with ENOTCACHED when package.json declares anything the
+      # lockfile does not contain. registry/generate.mjs strips devDependencies before
+      # generating the lockfile, but the tarball's package.json still lists them (and
+      # pi packages commonly list the host @earendil-works/* packages there), so mirror
+      # the strip here. Host peers are additionally marked optional for the same reason.
+      ${pkgs.nodejs}/bin/node --input-type=commonjs -e '
+        const fs = require("fs");
+        const host = ${builtins.toJSON hostProvidedDeps};
+        const p = process.argv[1];
+        const j = JSON.parse(fs.readFileSync(p));
+        delete j.devDependencies;
+        j.peerDependenciesMeta = j.peerDependenciesMeta || {};
+        for (const d of host) {
+          if (j.peerDependencies && j.peerDependencies[d]) {
+            j.peerDependenciesMeta[d] = { ...(j.peerDependenciesMeta[d] || {}), optional: true };
+          }
+        }
+        fs.writeFileSync(p, JSON.stringify(j, null, 2));
+      ' $out/package.json
     '' else tarballSrc;
     
   # Has valid lockfile → buildNpmPackage (cached via npmDepsHash)
@@ -93,7 +112,10 @@ else
     dontNpmBuild = true;
     # Suppress scripts globally (npm rebuild in configurePhase) and skip optional
     # platform-specific deps (e.g., @biomejs/cli-win32-arm64 on x86_64-linux).
-    npmFlags = [ "--ignore-scripts" "--omit=optional" "--no-audit" "--no-fund" ];
+    # --omit=peer: host-provided peers (@earendil-works/*, typebox) are not in the
+    # offline npm cache and are stripped from $out afterwards anyway, so npm ci must
+    # not try to resolve them (ENOTCACHED otherwise).
+    npmFlags = [ "--ignore-scripts" "--omit=optional" "--omit=peer" "--no-audit" "--no-fund" ];
     npmInstallFlags = [ "--legacy-peer-deps" ];
     makeCacheWritable = true;
     # npm install runs during configurePhase; unset SSL_CERT_FILE first
