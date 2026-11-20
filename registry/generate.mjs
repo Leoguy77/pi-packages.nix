@@ -4,7 +4,7 @@
 
 import { execSync, spawn } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir, tmpdir } from 'os';
 
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
@@ -96,6 +96,16 @@ async function getPackageMetadata(name) {
 // Shared npm cache across all lockfile generations
 const NPM_CACHE = join(TMP, 'shared-cache');
 
+// Resolve npm once, absolutely. spawn() without a shell inherits PATH, so launching
+// this script under a bare `node` (no npm on PATH) made every one of ~900 lockfile
+// generations fail with `spawn npm ENOENT` -- and a failed generation leaves the
+// package Tier B with no lockfile and no npmDepsHash, silently uncached forever.
+// Prefer the npm next to the running node binary.
+const NPM = process.env.NPM_BIN || (() => {
+  const sibling = join(dirname(process.execPath), 'npm');
+  return existsSync(sibling) ? sibling : 'npm';
+})();
+
 async function runNpmLock(workDir) {
   // Step 1: package-lock-only for fast resolution
   // Step 2: npm install to populate integrity hashes
@@ -103,7 +113,7 @@ async function runNpmLock(workDir) {
   
   // Step 1: Generate lockfile structure
   await new Promise((resolve, reject) => {
-    const c1 = spawn('npm', [
+    const c1 = spawn(NPM, [
       'install', '--package-lock-only', '--ignore-scripts',
       '--no-audit', '--no-fund', '--legacy-peer-deps',
       '--engine-strict=false', '--ignore-platform',
@@ -116,7 +126,7 @@ async function runNpmLock(workDir) {
   
   // Step 2: Full install to fill integrity, prefer-offline for speed
   await new Promise((resolve, reject) => {
-    const c2 = spawn('npm', [
+    const c2 = spawn(NPM, [
       'install', '--ignore-scripts',
       '--no-audit', '--no-fund', '--legacy-peer-deps',
       '--engine-strict=false', '--ignore-platform',
