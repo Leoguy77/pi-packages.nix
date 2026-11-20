@@ -9,6 +9,11 @@ import { join } from 'path';
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
 const REGISTRY_ONLY = process.env.REGISTRY_ONLY === '1';
 const LOCKS_ONLY = process.env.LOCKS_ONLY === '1';
+// REFRESH=1 re-fetches metadata for packages already in the registry instead of
+// trusting the cached entry forever. Without it a package's version is frozen at
+// whatever it was the first time the crawler saw it (see git history: every daily
+// commit added new keys and bumped zero existing ones).
+const REFRESH = process.env.REFRESH === '1';
 const SEARCH_URL = 'https://registry.npmjs.org/-/v1/search';
 const PAGE_SIZE = 250;
 const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
@@ -122,7 +127,9 @@ async function generateLockfile(name, tarballUrl, key) {
   const pkgDir = join(PACKAGES_DIR, key);
   const lockPath = join(pkgDir, 'package-lock.json');
   
-  if (existsSync(lockPath)) return;
+  // A stale lockfile pins the old dependency tree forever, so a version bump must
+  // rebuild it. Callers delete it up front when the version changed (processPackage).
+  if (existsSync(lockPath) && !REFRESH) return;
   
   const workDir = join(TMP, key);
   try {
@@ -224,6 +231,18 @@ async function processPackage(obj, packages) {
     if (!meta) return;
     
     const key = pkgName.replace(/@/g, '').replace(/\//g, '-');
+    const prev = packages[key];
+    const bumped = prev && prev.version !== meta.version;
+    
+    // Carry over the previous npmDepsHash only if the version did not move; a bumped
+    // version has a different dependency tree, so the hash is invalid and must be
+    // recomputed by the workflow's "Compute npmDepsHash" step.
+    if (bumped) {
+      meta.npmDepsHash = null;
+      try { execSync(`rm -f '${join(PACKAGES_DIR, key, 'package-lock.json')}'`, { timeout: 5000 }); } catch {}
+      process.stderr.write(`  bumped ${pkgName} ${prev.version} -> ${meta.version}\n`);
+    }
+    
     packages[key] = meta;
     
     if (!REGISTRY_ONLY && meta.tier === 'B') {
@@ -276,15 +295,26 @@ async function main() {
       if (LOCKS_ONLY) {
         // Lockfile-only mode: generate lockfiles for Tier B, skip metadata
         const entry = packages[key];
-        if (entry && entry.tier === 'B') {
+        // generateLockfile already no-ops on an existing lockfile unless REFRESH is
+        // set; in lockfile-only mode we never want a full rewrite, so force the skip.
+        if (entry && entry.tier === 'B' && !existsSync(join(PACKAGES_DIR, key, 'package-lock.json'))) {
           process.stderr.write(`[${fetched}/${objects.length}] ${name} (lockfile)\n`);
           generateLockfile(name, entry.tarball, key);
         }
         return;
       }
       
-      if (processed.has(key)) {
+      if (processed.has(key) && !REFRESH) {
         process.stderr.write(`[${fetched}/${objects.length}] ${name} (cached)\n`);
+        return;
+      }
+      
+      // Refresh mode: the search hit already carries the published version, so a
+      // package whose version did not move needs no metadata fetch at all. This is
+      // what keeps a full refresh at minutes instead of an hour of 250ms waits.
+      const cachedVersion = packages[key]?.version;
+      if (REFRESH && cachedVersion && obj.package?.version === cachedVersion) {
+        process.stderr.write(`[${fetched}/${objects.length}] ${name} (up to date)\n`);
         return;
       }
       

@@ -5,6 +5,11 @@ permissions:
   id-token: write
 on:
   workflow_dispatch:
+    inputs:
+      refresh:
+        description: 'Re-fetch metadata for already-registered packages (1 = check for new versions)'
+        required: false
+        default: '0'
   push:
     branches: [main]
   pull_request:
@@ -29,11 +34,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: DeterminateSystems/nix-installer-action@main
       - name: Update package metadata
         run: node registry/generate.mjs
         env:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
+          REFRESH: ${{ github.event.inputs.refresh || '0' }}
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs
         env:
@@ -52,26 +59,37 @@ jobs:
               if(m.length>0)fs.unlinkSync(lp);
             });
           "
-      - name: Compute npmDepsHash for new Tier B packages
+      - name: Compute npmDepsHash for Tier B packages missing one
         run: |
+          # prefetch-npm-deps reads the lockfile directly and prints the exact hash
+          # buildNpmPackage expects (~30s/package). The previous approach built the
+          # package to harvest the hash from the error message: slower, and it needed a
+          # nix which this job did not have, so every new Tier B package shipped with
+          # npmDepsHash=null.
+          export PATH="$(nix build nixpkgs#prefetch-npm-deps --no-link --print-out-paths)/bin:$PATH"
           node -e "
             const {execSync} = require('child_process');
-            const {readFileSync,writeFileSync} = require('fs');
+            const {readFileSync,writeFileSync,existsSync} = require('fs');
             const r = JSON.parse(readFileSync('registry/registry.json','utf8'));
             const pending = Object.entries(r.packages).filter(([k,v]) =>
-              v.tier === 'B' && !v.npmDepsHash && require('fs').existsSync('packages/'+k+'/package-lock.json')
+              v.tier === 'B' && !v.npmDepsHash && existsSync('packages/'+k+'/package-lock.json')
             );
+            const BUDGET_MS = Number(process.env.HASH_BUDGET_MS || 3 * 60 * 60 * 1000);
+            const started = Date.now();
             console.log('Computing npmDepsHash for', pending.length, 'packages');
-            let ok = 0;
-            for (const [name, entry] of pending) {
+            let ok = 0, seen = 0;
+            for (const [name] of pending) {
+              if (Date.now() - started > BUDGET_MS) { console.log('  budget exhausted, deferring the rest to the next run'); break; }
+              seen++;
               try {
-                const out = execSync('nix build .#pi-' + name + ' --no-link 2>&1 || true', { timeout: 300000 });
-                const m = out.toString().match(/got:\s*(sha256-\S+)/);
-                if (m) { r.packages[name].npmDepsHash = m[1]; ok++; console.log('  OK', name); }
-                else { console.log('  SKIP', name, '(no hash in output)'); }
+                const out = execSync('prefetch-npm-deps packages/' + name + '/package-lock.json', { timeout: 180000 });
+                const m = out.toString().match(/sha256-\S+/);
+                if (m) { r.packages[name].npmDepsHash = m[0]; ok++; console.log('  OK', name); }
+                else { console.log('  SKIP', name, '(no hash)'); }
               } catch(e) {
                 console.log('  FAIL', name, e.message.slice(0,80));
               }
+              if (seen % 25 === 0) writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
             }
             console.log('Done:', ok, '/', pending.length, 'hashes');
             writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
