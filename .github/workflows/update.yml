@@ -79,7 +79,9 @@ jobs:
             const pending = Object.entries(r.packages).filter(([k,v]) =>
               v.tier === 'B' && !v.npmDepsHash && existsSync('packages/'+k+'/package-lock.json')
             );
-            const BUDGET_MS = Number(process.env.HASH_BUDGET_MS || 3 * 60 * 60 * 1000);
+            // 8-way, so the budget is wall clock: 3h used to cap throughput, now it just
+            // leaves margin for the lockfile pass and the commit inside the 330-min job cap.
+            const BUDGET_MS = Number(process.env.HASH_BUDGET_MS || 4 * 60 * 60 * 1000);
             const CONCURRENCY = Number(process.env.HASH_CONCURRENCY || 8);
             const started = Date.now();
             console.log('Computing npmDepsHash for', pending.length, 'packages, ' + CONCURRENCY + '-way');
