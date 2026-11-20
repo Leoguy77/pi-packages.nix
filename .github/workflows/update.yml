@@ -40,7 +40,7 @@ jobs:
         env:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
-          REFRESH: ${{ github.event.inputs.refresh || '0' }}
+          REFRESH: ${{ github.event.inputs.refresh || '1' }}
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs
         env:
@@ -98,6 +98,7 @@ jobs:
         run: node scripts/update-readme-stats.mjs
       - name: Check for changes
         id: changes
+        if: always()
         run: |
           if ! git diff --quiet -- registry/ packages/ README.md; then
             echo "changed=true" >> $GITHUB_OUTPUT
