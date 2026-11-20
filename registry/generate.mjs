@@ -2,9 +2,9 @@
 // generate.mjs - Crawl npm registry for pi-package keyword and generate registry.json
 // Also generates package-lock.json for Tier B packages
 
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { homedir, tmpdir } from 'os';
 
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
@@ -101,10 +101,22 @@ const NPM_CACHE = join(TMP, 'shared-cache');
 // generations fail with `spawn npm ENOENT` -- and a failed generation leaves the
 // package Tier B with no lockfile and no npmDepsHash, silently uncached forever.
 // Prefer the npm next to the running node binary.
-const NPM = process.env.NPM_BIN || (() => {
-  const sibling = join(dirname(process.execPath), 'npm');
-  return existsSync(sibling) ? sibling : 'npm';
-})();
+// process.execPath resolves symlinks, so it cannot be used to find npm next to the
+// node that was invoked (NixOS nodejs' bin/node is a symlink into nodejs-slim, which
+// has no npm). PATH lookup is the only reliable resolution; validate it up front.
+const NPM = process.env.NPM_BIN || 'npm';
+// Refuse to start a sweep without npm. The failure otherwise surfaces once per
+// package as a logged "Lockfile failed" and leaves Tier B packages with no lockfile
+// and no hash -- buildable, never cacheable, and easy to miss entirely (840 of them
+// went unnoticed). nodejs-slim ships without npm, which is the usual trap.
+if (spawnSync(NPM, ['--version']).status !== 0 && !REGISTRY_ONLY) {
+  process.stderr.write(
+    'error: npm not found. Run with a node whose bin also has npm, or set NPM_BIN.\n' +
+    '       e.g. PATH=<nix-store>/bin:$PATH where that dir contains both node and npm.\n' +
+    '       (nodejs-slim has no npm; nodejs-slim-*-npm provides it separately.)\n'
+  );
+  process.exit(1);
+}
 
 async function runNpmLock(workDir) {
   // Step 1: package-lock-only for fast resolution
