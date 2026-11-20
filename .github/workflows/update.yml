@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       refresh:
-        description: 'Re-fetch metadata for already-registered packages (1 = check for new versions)'
+        description: 'Check already-registered packages for new versions (default 1; 0 = new packages only)'
         required: false
-        default: '0'
+        default: '1'
   push:
     branches: [main]
   pull_request:
@@ -29,6 +29,12 @@ jobs:
   update-registry:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # 330 min, not GitHub's 360: the run must reach the commit step before the
+    # platform kills it, otherwise a long refresh discards every bump it made.
+    timeout-minutes: 330
+    concurrency:
+      group: registry-update
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,11 +67,10 @@ jobs:
           "
       - name: Compute npmDepsHash for Tier B packages missing one
         run: |
-          # prefetch-npm-deps reads the lockfile directly and prints the exact hash
-          # buildNpmPackage expects (~30s/package). The previous approach built the
-          # package to harvest the hash from the error message: slower, and it needed a
-          # nix which this job did not have, so every new Tier B package shipped with
-          # npmDepsHash=null.
+          # prefetch-npm-deps reads a lockfile and prints the fixed-output hash
+          # buildNpmPackage expects. It is I/O bound (~30s/package), so run a bounded
+          # number in parallel: serial, the ~11k packages this backfill created would
+          # need ~92h (4 weeks of nightly runs); at 8-way it is a few nights.
           export PATH="$(nix build nixpkgs#prefetch-npm-deps --no-link --print-out-paths)/bin:$PATH"
           node -e "
             const {execSync} = require('child_process');
@@ -75,24 +80,40 @@ jobs:
               v.tier === 'B' && !v.npmDepsHash && existsSync('packages/'+k+'/package-lock.json')
             );
             const BUDGET_MS = Number(process.env.HASH_BUDGET_MS || 3 * 60 * 60 * 1000);
+            const CONCURRENCY = Number(process.env.HASH_CONCURRENCY || 8);
             const started = Date.now();
-            console.log('Computing npmDepsHash for', pending.length, 'packages');
+            console.log('Computing npmDepsHash for', pending.length, 'packages, ' + CONCURRENCY + '-way');
             let ok = 0, seen = 0;
-            for (const [name] of pending) {
-              if (Date.now() - started > BUDGET_MS) { console.log('  budget exhausted, deferring the rest to the next run'); break; }
-              seen++;
+            // execSync blocks, so it serialises even inside Promise.all. Use the async
+            // exec to get real concurrency.
+            const {exec} = require('child_process');
+            const {promisify} = require('util');
+            const run = promisify(exec);
+
+            const runOne = async (name) => {
               try {
-                const out = execSync('prefetch-npm-deps packages/' + name + '/package-lock.json', { timeout: 180000 });
-                const m = out.toString().match(/sha256-\S+/);
-                if (m) { r.packages[name].npmDepsHash = m[0]; ok++; console.log('  OK', name); }
-                else { console.log('  SKIP', name, '(no hash)'); }
+                const {stdout} = await run('prefetch-npm-deps packages/' + name + '/package-lock.json', { timeout: 300000, maxBuffer: 1048576 });
+                const m = stdout.match(/sha256-\S+/);
+                if (m) { r.packages[name].npmDepsHash = m[0]; ok++; }
+                else console.log('  SKIP', name, '(no hash)');
               } catch(e) {
-                console.log('  FAIL', name, e.message.slice(0,80));
+                console.log('  FAIL', name, String(e.message).slice(0,60));
               }
-              if (seen % 25 === 0) writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
-            }
-            console.log('Done:', ok, '/', pending.length, 'hashes');
-            writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
+            };
+
+            (async () => {
+              for (let i = 0; i < pending.length; i += CONCURRENCY) {
+                if (Date.now() - started > BUDGET_MS) { console.log('  budget exhausted, deferring the rest'); break; }
+                const batch = pending.slice(i, i + CONCURRENCY);
+                await Promise.all(batch.map(([name]) => runOne(name)));
+                seen += batch.length;
+                // Checkpoint every batch so a later failure still leaves progress on disk.
+                writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
+                if (seen % (CONCURRENCY * 10) === 0) console.log('  ' + seen + '/' + pending.length + ' (ok=' + ok + ')');
+              }
+              console.log('Done:', ok, '/', pending.length, 'hashes');
+              writeFileSync('registry/registry.json', JSON.stringify(r, null, 2) + '\n');
+            })();
           "
       - name: Update README stats
         run: node scripts/update-readme-stats.mjs
@@ -108,6 +129,15 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'chore: update registry and lockfiles'
+          # Two commits: the registry is what consumers resolve, the lockfiles are
+          # build inputs derived from it. Keeping them separate means a bad version
+          # bump can be reverted without also reverting lockfile churn.
+          if ! git diff --quiet -- registry/registry.json README.md; then
+            git add registry/registry.json README.md
+            git commit -m 'chore(registry): sync package versions from npm'
+          fi
+          if ! git diff --quiet -- packages/; then
+            git add packages/
+            git commit -m 'chore(locks): regenerate lockfiles for bumped packages'
+          fi
           git push origin HEAD:main

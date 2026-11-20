@@ -81,6 +81,7 @@ jobs:
             // Build in batches of 200, push as we go
             const BATCH=200;
             let pushed=0;
+            const failed=[];
             for(let i=0;i<toBuild.length;i+=BATCH){
               const batch=toBuild.slice(i,i+BATCH);
               const attrs=batch.map(k=>'.#pi-'+safe(k));
@@ -94,8 +95,15 @@ jobs:
               ],{stdio:['ignore','inherit','inherit'],timeout:600000});
 
               for(const k of batch){
-                const r=spawnSync('nix',['build','--no-link','--print-out-paths','.#pi-'+safe(k)],{timeout:3000});
-                if(r.status!==0)continue;
+                const r=spawnSync('nix',['build','--no-link','--print-out-paths','.#pi-'+safe(k)],{timeout:60000});
+                if(r.status!==0){
+                  // Build failed: keep the reason so the run ends with a worklist
+                  // instead of a bare red X. --keep-going means one bad package does
+                  // not stop the batch.
+                  failed.push({name:k, outPath:allOut['pi-'+safe(k)]||null,
+                               err:(r.stderr||'').toString().split('\n').filter(l=>/error/i.test(l)).slice(0,4).join(' | ').slice(0,400)});
+                  continue;
+                }
                 const p=r.stdout.toString().trim();
                 if(!p.startsWith('/nix/store/'))continue;
                 const push=spawnSync('/tmp/attic/bin/attic',['push',process.env.ATTIC_CACHE,p],{timeout:60000});
@@ -104,6 +112,23 @@ jobs:
               console.log('Pushed: '+pushed);
               spawnSync('nix',['store','gc'],{stdio:'ignore'});
             }
-            console.log('Done: pushed='+pushed);
+            console.log('Done: pushed='+pushed+' failed='+failed.length);
+
+            // Worklist for the next run: a failed build is a real defect (bad
+            // lockfile, 404 tarball, native module) that the registry sweep cannot
+            // detect, because the sweep only resolves the dependency graph.
+            require('fs').writeFileSync('build-failures.json', JSON.stringify(failed,null,2)+'\n');
+            const md=['## Build failures','',
+              'Built '+names.length+' packages, pushed '+pushed+', failed '+failed.length+'.','',
+              ...failed.map(f=>'- `'+f.name+'` — '+f.err)];
+            require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY||'/dev/null', md.join('\n')+'\n');
+            for(const f of failed) console.log('FAILED '+f.name+' :: '+f.err);
           "
         timeout-minutes: 360
+      - name: Upload failure worklist
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failures
+          path: build-failures.json
+          if-no-files-found: ignore

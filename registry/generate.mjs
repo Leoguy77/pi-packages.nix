@@ -5,6 +5,7 @@
 import { execSync, spawn } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { homedir, tmpdir } from 'os';
 
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
 const REGISTRY_ONLY = process.env.REGISTRY_ONLY === '1';
@@ -24,7 +25,12 @@ const PAGE_SIZE = 250;
 const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
 const REGISTRY_PATH = new URL('../registry/registry.json', import.meta.url).pathname;
 const STATE_PATH = new URL('../registry/.generate-state.json', import.meta.url).pathname;
-const TMP = '/tmp/pi-registry-gen';
+// Scratch space lives on real disk, not the system tmpdir: /tmp is often tmpfs
+// (RAM), and an 8GiB npm cache there will exhaust RAM and fail every install with
+// ENOSPC (npm exit 228). Override with PI_REGISTRY_TMPDIR if needed.
+const TMP = process.env.PI_REGISTRY_TMPDIR
+  ? join(process.env.PI_REGISTRY_TMPDIR, 'pi-registry-gen')
+  : join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'pi-registry-gen');
 
 // Token-bucket rate limiter: 1 request per 250ms globally
 let lastRequest = 0;
@@ -128,13 +134,28 @@ async function runNpmLock(workDir) {
   });
 }
 
-async function generateLockfile(name, tarballUrl, key) {
+// Version recorded in an existing lockfile, or null when it has none.
+function lockfileVersion(lockPath) {
+  try {
+    return JSON.parse(readFileSync(lockPath, 'utf8')).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function generateLockfile(name, tarballUrl, key, targetVersion) {
   const pkgDir = join(PACKAGES_DIR, key);
   const lockPath = join(pkgDir, 'package-lock.json');
   
-  // A stale lockfile pins the old dependency tree forever, so a version bump must
-  // rebuild it. Callers delete it up front when the version changed (processPackage).
-  if (existsSync(lockPath) && !REFRESH) return;
+  // The lockfile exists and describes the version we are being asked for: nothing to
+  // do. A full REFRESH sweep used to regenerate every Tier B lockfile (~8 min each
+  // batch, hours total) even when the version had not moved, which made the nightly
+  // job far too slow to run often. Compare versions instead of trusting a flag.
+  if (existsSync(lockPath)) {
+    const have = lockfileVersion(lockPath);
+    if (!targetVersion || have === targetVersion) return;
+    process.stderr.write(`  lockfile ${key} is ${have ?? 'unversioned'}, want ${targetVersion} — regenerating\n`);
+  }
   
   const workDir = join(TMP, key);
   try {
@@ -273,7 +294,7 @@ async function processPackage(obj, packages) {
     packages[key] = meta;
     
     if (!REGISTRY_ONLY && meta.tier === 'B') {
-      await generateLockfile(pkgName, meta.tarball, key);
+      await generateLockfile(pkgName, meta.tarball, key, meta.version);
     }
   } catch (err) {
     process.stderr.write(`  Error ${pkgName}: ${err.message}\n`);
@@ -293,7 +314,7 @@ async function main() {
       await Promise.all(batch.map(async ([key, entry]) => {
         done++;
         process.stderr.write(`[${done}/${tierB.length}] ${entry.name}\n`);
-        await generateLockfile(entry.name, entry.tarball, key);
+        await generateLockfile(entry.name, entry.tarball, key, entry.version);
       }));
     }
     console.error('Lockfiles done');
@@ -326,7 +347,7 @@ async function main() {
         // set; in lockfile-only mode we never want a full rewrite, so force the skip.
         if (entry && entry.tier === 'B' && !existsSync(join(PACKAGES_DIR, key, 'package-lock.json'))) {
           process.stderr.write(`[${fetched}/${objects.length}] ${name} (lockfile)\n`);
-          generateLockfile(name, entry.tarball, key);
+          generateLockfile(name, entry.tarball, key, entry.version);
         }
         return;
       }
