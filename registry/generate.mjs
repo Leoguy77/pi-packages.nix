@@ -328,7 +328,8 @@ async function main() {
   const packages = existing.packages || {};
   
   if (LOCKS_ONLY) {
-    const tierB = Object.entries(packages).filter(([_, e]) => e.tier === 'B');
+    const tierB = Object.entries(packages)
+      .filter(([k, e]) => e.tier === 'B' && (!ONLY.length || ONLY.includes(k)));
     process.stderr.write(`Generating lockfiles for ${tierB.length} Tier B packages...\n`);
     let done = 0;
     for (let i = 0; i < tierB.length; i += CONCURRENCY) {
@@ -363,13 +364,15 @@ async function main() {
       const key = name.replace(/@/g, '').replace(/\//g, '-');
       
       if (LOCKS_ONLY) {
-        // Lockfile-only mode: generate lockfiles for Tier B, skip metadata
+        // Unreachable: the top-level LOCKS_ONLY branch runs before the crawl and
+        // returns. Kept only so the key-filter logic below reads coherently.
+        // Lockfile-only mode: generate lockfiles for Tier B, skip metadata.
+        // generateLockfile is async -- it MUST be awaited, otherwise this returns
+        // immediately and the process exits while npm is still resolving.
         const entry = packages[key];
-        // generateLockfile already no-ops on an existing lockfile unless REFRESH is
-        // set; in lockfile-only mode we never want a full rewrite, so force the skip.
         if (entry && entry.tier === 'B' && !existsSync(join(PACKAGES_DIR, key, 'package-lock.json'))) {
           process.stderr.write(`[${fetched}/${objects.length}] ${name} (lockfile)\n`);
-          generateLockfile(name, entry.tarball, key, entry.version);
+          await generateLockfile(name, entry.tarball, key, entry.version);
         }
         return;
       }

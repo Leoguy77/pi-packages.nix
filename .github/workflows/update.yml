@@ -61,7 +61,13 @@ jobs:
               const lp=p.join(base,d,'package-lock.json');
               if(!fs.existsSync(lp))return;
               const l=JSON.parse(fs.readFileSync(lp,'utf8'));
-              const m=Object.entries(l.packages||{}).filter(([pkg,i])=>i.version&&!i.integrity&&pkg!=='');
+              // An entry legitimately has no integrity when npm never fetched it:
+              // "optional": true means it did not apply to this platform, and
+              // "inBundle": true means it ships inside its parent tarball. Flagging
+              // those deleted 195 perfectly good lockfiles per run, which then had to
+              // be regenerated from scratch on the next one.
+              const m=Object.entries(l.packages||{}).filter(([pkg,i])=>
+                i.version&&!i.integrity&&pkg!==''&&!i.optional&&!i.inBundle);
               if(m.length>0)fs.unlinkSync(lp);
             });
           "
