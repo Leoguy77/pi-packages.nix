@@ -10,13 +10,18 @@ import { homedir, tmpdir } from 'os';
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
 const REGISTRY_ONLY = process.env.REGISTRY_ONLY === '1';
 const LOCKS_ONLY = process.env.LOCKS_ONLY === '1';
-// REFRESH=1 re-fetches metadata for packages already in the registry instead of
-// trusting the cached entry forever. Without it a package's version is frozen at
-// whatever it was the first time the crawler saw it (see git history: every daily
-// commit added new keys and bumped zero existing ones).
-const REFRESH = process.env.REFRESH === '1';
-// PACKAGES=a,b,c limits a REFRESH run to the named registry keys, so the refresh path
-// can be validated (and a specific set of installs updated) before the full sweep.
+// Refresh existing entries instead of only adding new ones. Without this a
+// package's version is frozen at whatever it was the first time the crawler saw
+// it (see git history: every daily commit added new keys and bumped zero existing
+// ones). Two modes, named to match the PR that diagnosed this (Leoguy77/pi-packages.nix#2):
+//   REFRESH_KEYS="a,b"  re-crawl just these registry keys and exit, no search crawl.
+//   REFRESH_STALE=1     during a normal crawl, re-crawl any entry whose stored
+//                       version differs from the one the search index just
+//                       returned -- free, since search results carry it.
+const REFRESH_STALE = process.env.REFRESH_STALE === '1' || process.env.REFRESH === '1';
+const REFRESH_KEYS = (process.env.REFRESH_KEYS || '')
+  .split(/[ ,]+/).map(s => s.trim()).filter(Boolean);
+// PACKAGES=a,b,c limits a LOCKS_ONLY run to the named registry keys.
 const ONLY = (process.env.PACKAGES || '').split(',').filter(Boolean);
 // Packages provided by the pi host at runtime, never installed from npm.
 const HOST_DEPS = ["typebox","@earendil-works/pi-ai","@earendil-works/pi-agent-core","@earendil-works/pi-coding-agent","@earendil-works/pi-tui"];
@@ -170,7 +175,7 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
   const lockPath = join(pkgDir, 'package-lock.json');
   
   // The lockfile exists and describes the version we are being asked for: nothing to
-  // do. A full REFRESH sweep used to regenerate every Tier B lockfile (~8 min each
+  // do. A full REFRESH_STALE sweep used to regenerate every Tier B lockfile (~8 min each
   // batch, hours total) even when the version had not moved, which made the nightly
   // job far too slow to run often. Compare versions instead of trusting a flag.
   if (existsSync(lockPath)) {
@@ -327,6 +332,46 @@ async function main() {
   const existing = existsSync(REGISTRY_PATH) ? JSON.parse(readFileSync(REGISTRY_PATH, 'utf8')) : { packages: {} };
   const packages = existing.packages || {};
   
+  // Refresh specific keys and exit, without paying for a full search crawl. Useful
+  // when you know a package moved and do not want to wait for the nightly run.
+  // (Ported from Leoguy77/pi-packages.nix#2 by @twstagg, who diagnosed the frozen
+  // registry.)
+  if (REFRESH_KEYS.length > 0) {
+    let updated = 0;
+    for (const key of REFRESH_KEYS) {
+      const entry = packages[key];
+      if (!entry) {
+        process.stderr.write(`  skip ${key}: not in registry\n`);
+        continue;
+      }
+      try {
+        const meta = await getPackageMetadata(entry.name);
+        if (!meta) {
+          process.stderr.write(`  skip ${key}: no npm metadata\n`);
+          continue;
+        }
+        if (meta.version === entry.version) {
+          process.stderr.write(`  ${key}: already at ${entry.version}\n`);
+          continue;
+        }
+        process.stderr.write(`  ${key}: ${entry.version} -> ${meta.version}\n`);
+        // A bump invalidates both the lockfile and the hash: the dependency tree
+        // may have moved even when the direct dependency set looks identical, and
+        // only regenerating both makes the fixed-output check pass. processPackage
+        // owns that, so reuse it rather than duplicating the carry-over logic.
+        await processPackage(
+          { package: { name: entry.name, version: meta.version } }, packages
+        );
+        updated++;
+      } catch (err) {
+        process.stderr.write(`  error ${key}: ${err.message}\n`);
+      }
+    }
+    writeFileSync(REGISTRY_PATH, JSON.stringify({ packages }, null, 2) + '\n');
+    process.stderr.write(`Refreshed ${updated} of ${REFRESH_KEYS.length} key(s)\n`);
+    return;
+  }
+  
   if (LOCKS_ONLY) {
     const tierB = Object.entries(packages)
       .filter(([k, e]) => e.tier === 'B' && (!ONLY.length || ONLY.includes(k)));
@@ -377,7 +422,7 @@ async function main() {
         return;
       }
       
-      if (processed.has(key) && !REFRESH) {
+      if (processed.has(key) && !REFRESH_STALE) {
         process.stderr.write(`[${fetched}/${objects.length}] ${name} (cached)\n`);
         return;
       }
@@ -388,7 +433,7 @@ async function main() {
       if (ONLY.length && !ONLY.includes(key)) return;
       
       const cachedVersion = packages[key]?.version;
-      if (REFRESH && cachedVersion && obj.package?.version === cachedVersion) {
+      if (REFRESH_STALE && cachedVersion && obj.package?.version === cachedVersion) {
         process.stderr.write(`[${fetched}/${objects.length}] ${name} (up to date)\n`);
         return;
       }

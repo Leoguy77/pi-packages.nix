@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       refresh:
-        description: 'Check already-registered packages for new versions (default 1; 0 = new packages only)'
+        description: 'Refresh already-registered packages whose version moved upstream (default 1; 0 = new packages only)'
         required: false
         default: '1'
   push:
@@ -46,7 +46,7 @@ jobs:
         env:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
-          REFRESH: ${{ github.event.inputs.refresh || '1' }}
+          REFRESH_STALE: ${{ github.event.inputs.refresh || '1' }}
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs
         env:
