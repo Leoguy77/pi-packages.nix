@@ -78,10 +78,20 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
     }
   }
 
+  // Whatever the batch did not produce gets one more try on its own. Before
+  // this checked r.status, anything that succeeded here was still recorded as a
+  // failure, never pushed, and then deleted by the `nix store gc` below — which
+  // is why 82 packages reported an empty error and vanished from the cache.
   for (const k of batch) {
     if (built.includes(k)) continue;
     const r = spawnSync('nix', ['build', '--no-link', '.#pi-' + safe(k)], { timeout: 300_000 });
-    failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) });
+    if (r.status !== 0) {
+      failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) });
+      continue;
+    }
+    const p = spawnSync(ATTIC, ['push', CACHE, outPath(k)], { timeout: 300_000 });
+    if (p.status === 0) pushed++;
+    else failed.push({ name: k, outPath: outPath(k) || null, err: firstError(p.stderr) });
   }
 
   console.log(`Pushed: ${pushed}`);
