@@ -11,7 +11,10 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs
 const ENDPOINT = process.env.ATTIC_ENDPOINT;
 const CACHE = process.env.ATTIC_CACHE;
 const ATTIC = '/tmp/attic/bin/attic';
-const BATCH = Number(process.env.BATCH || 200);
+// Small batches on purpose: spawnSync's timeout SIGTERMs `nix build`, which
+// prints "interrupted by the user" and loses the whole remaining batch. The
+// step has 330 minutes; this only bounds one burst so a kill costs little.
+const BATCH = Number(process.env.BATCH || 40);
 
 const safe = n => n.replace(/\./g, '_');
 const firstError = b => (b || '').toString().split('\n')
@@ -54,7 +57,7 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
   spawnSync('nix', ['build', '--no-link', '--keep-going',
     '--option', 'sandbox', 'false', '--option', 'max-jobs', '4',
     ...batch.map(k => '.#pi-' + safe(k))],
-    { stdio: ['ignore', 'inherit', 'inherit'], timeout: 900_000 });
+    { stdio: ['ignore', 'inherit', 'inherit'], timeout: 3 * 60 * 60 * 1000 });
 
   // --keep-going means some of the batch may have failed; the store tells us
   // which ones without one `nix build` spawn per package.
