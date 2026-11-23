@@ -17,8 +17,13 @@ const ATTIC = '/tmp/attic/bin/attic';
 const BATCH = Number(process.env.BATCH || 40);
 
 const safe = n => n.replace(/\./g, '_');
+// Nix echoes the whole /nix/store/...drv path in its first error line, which ate
+// the 400-char budget and left nothing but "npm e". Keep the store basename so
+// the actual cause survives the slice.
 const firstError = b => (b || '').toString().split('\n')
-  .filter(l => /error/i.test(l)).slice(0, 4).join(' | ').slice(0, 400);
+  .filter(l => /error/i.test(l)).slice(0, 4).join(' | ')
+  .replace(/\/nix\/store\/[a-z0-9]+-/g, '')
+  .slice(0, 400);
 
 const reg = JSON.parse(readFileSync('registry/registry.json', 'utf8'));
 const names = Object.entries(reg.packages)
@@ -50,6 +55,20 @@ console.log(`Need building: ${toBuild.length}`);
 let pushed = 0;
 const failed = [];
 
+// `--no-link` leaves every output unrooted, so nix's own auto-GC (the runner
+// sets min-free) can delete a path between the build and the push. attic then
+// rejects the whole batch with "path ... is not valid", which sank 13 packages
+// per run. Ask nix which paths survive and only push those.
+const validPaths = paths => {
+  const r = spawnSync('nix', ['path-info', '--json-format', '1', '--json', ...paths],
+    { timeout: 300_000, maxBuffer: 16 * 1024 * 1024 });
+  if (r.status !== 0) return paths;
+  try {
+    const info = JSON.parse(r.stdout.toString());
+    return paths.filter(p => info[p]);
+  } catch { return paths; }
+};
+
 for (let i = 0; i < toBuild.length; i += BATCH) {
   const batch = toBuild.slice(i, i + BATCH);
   console.log(`Build batch ${i / BATCH + 1}: ${batch.length} pkgs`);
@@ -64,16 +83,22 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
   const built = batch.filter(k => existsSync(outPath(k) || ''));
 
   if (built.length) {
-    const all = spawnSync(ATTIC, ['push', CACHE, ...built.map(outPath)], { timeout: 1_800_000 });
+    const pushable = validPaths(built.map(outPath));
+    for (const k of built) {
+      if (!pushable.includes(outPath(k))) failed.push({ name: k, outPath: outPath(k), err: 'output was garbage-collected before the push' });
+    }
+    const all = pushable.length
+      ? spawnSync(ATTIC, ['push', CACHE, ...pushable], { timeout: 1_800_000 })
+      : { status: 0 };
     if (all.status === 0) {
-      pushed += built.length;
+      pushed += pushable.length;
     } else {
       // A single bad path fails the whole call, so retry one at a time to find
       // out which and keep the rest.
-      for (const k of built) {
-        const r = spawnSync(ATTIC, ['push', CACHE, outPath(k)], { timeout: 300_000 });
+      for (const p of pushable) {
+        const r = spawnSync(ATTIC, ['push', CACHE, p], { timeout: 300_000 });
         if (r.status === 0) pushed++;
-        else failed.push({ name: k, outPath: outPath(k), err: firstError(r.stderr) });
+        else failed.push({ name: p, outPath: p, err: firstError(r.stderr) });
       }
     }
   }
@@ -89,7 +114,12 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
       failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) });
       continue;
     }
-    const p = spawnSync(ATTIC, ['push', CACHE, outPath(k)], { timeout: 300_000 });
+    const ok = validPaths([outPath(k)]);
+    if (!ok.length) {
+      failed.push({ name: k, outPath: outPath(k) || null, err: 'output was garbage-collected before the push' });
+      continue;
+    }
+    const p = spawnSync(ATTIC, ['push', CACHE, ok[0]], { timeout: 300_000 });
     if (p.status === 0) pushed++;
     else failed.push({ name: k, outPath: outPath(k) || null, err: firstError(p.stderr) });
   }
