@@ -226,6 +226,17 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
       if (pj.devDependencies) {
         delete pj.devDependencies;
       }
+      // Drop bundleDependencies/bundledDependencies. npm marks those packages
+      // "inBundle": true, which writes the entry without a resolved URL even when the
+      // tree is gone and the package is on npm. prefetch-npm-deps skips any entry with
+      // no resolved URL, so npmDeps cannot be built at all:
+      //   "No cacheable dependencies were found"
+      // (e.g. @ayulab/oh-my-pi bundling @ayulab/pi-rewind). Pinning the bundle as a
+      // normal dependency resolves it from the registry like anything else.
+      if (pj.bundleDependencies || pj.bundledDependencies) {
+        delete pj.bundleDependencies;
+        delete pj.bundledDependencies;
+      }
       if (toRemove.length || JSON.stringify(pj) !== readFileSync(pjPath, 'utf8')) {
         writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
       }
