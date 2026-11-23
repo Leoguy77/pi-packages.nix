@@ -233,8 +233,8 @@ nix build .#packages.x86_64-linux.pi-my-tool 2>&1 | grep "got:"
 
 ### 🚨 Known issues
 
-- **Tier B fallback packages** need `--option sandbox false` because inline `npm install` needs network access.
-- **NODE_TLS_REJECT_UNAUTHORIZED=0** is set at derivation level for Tier B builds because some npm packages bundle their own TLS certs that break inside the Nix sandbox.
+- **Tier B fallback packages** need `--option sandbox false` because inline `npm install` needs network access, and the sandbox has no DNS: curl exits 6 inside it and gets HTTP 200 outside. Once CI builds one and pushes it to Attic, consumers fetch it from the cache and never need the flag. Verified 2026-11-23.
+- **NODE_TLS_REJECT_UNAUTHORIZED=0** is set at derivation level for Tier B builds because a few packages ship their own TLS material that does not validate inside the sandbox. The cruder problem is `SSL_CERT_FILE=/no-cert-file.crt`, which stdenv sets and which makes every TLS connection fail with `curl: (77) error adding trust anchors`; both build paths unset it before running npm.
 - **Workspace dependencies** (`workspace:*`) in package.json are stripped before lockfile generation since they're unresolvable by standalone npm.
 - **devDependencies** are stripped before lockfile generation — they'd cause E404 for private scoped packages and aren't needed for production installs.
 

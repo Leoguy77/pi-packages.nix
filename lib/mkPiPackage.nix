@@ -143,9 +143,14 @@ else
     HOME = "/tmp";  # npm needs writable HOME
     
     # ponytail: inline npm install for packages without lockfile.
-    # Requires network access — use --option sandbox false or CI with
-    # magic-nix-cache-action (which disables sandbox).
-    # 1663/1833 Tier B packages have valid lockfiles and use buildNpmPackage.
+    # Requires network access, so the sandbox must be off:
+    #   nix build --option sandbox false .#packages.<system>.pi-<key>
+    # Verified: inside the sandbox curl cannot resolve registry.npmjs.org
+    # (exit 6); with sandbox=false it gets HTTP 200. This is the only reason
+    # these packages are uncacheable elsewhere -- once CI pushes one to Attic,
+    # consumers get it as a normal substituter fetch with no flags.
+    # (The stale numbers that used to be here -- 1663/1833 -- are gone; the
+    # split is in README.md and scripts/update-readme-stats.mjs keeps it right.)
     buildPhase = ''
       # stdenv sets SSL_CERT_FILE=/no-cert-file.crt which breaks TLS;
       # unset + set reject to 0 for child processes that re-read env
