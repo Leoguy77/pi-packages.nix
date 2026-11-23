@@ -40,6 +40,24 @@ jobs:
       - name: Build attic CLI
         run: nix build nixpkgs#attic-client --out-link /tmp/attic
 
+      # Cloudflare rejects request bodies over 100 MB, which kills any push whose
+      # NAR is bigger than that (249 packages in the 2026-11-21 run, all with
+      # `HTTP 413 Payload Too Large` and a Cloudflare body). The limit is applied
+      # at the edge before traefik or atticd run, so the only fix is to not go
+      # through the edge: pin the hostname to the origin for this job only.
+      #
+      # Nothing else changes — same hostname, same cert, so attic's own config and
+      # ATTIC_ENDPOINT stay as they are. The guard below turns an origin IP change
+      # into one loud failure instead of thousands of unexplained 413s.
+      - name: Bypass Cloudflare for pushes
+        env:
+          ORIGIN: ${{ secrets.ATTIC_ORIGIN_IP }}
+        run: |
+          [ -n "$ORIGIN" ] || { echo "::error::ATTIC_ORIGIN_IP secret is not set"; exit 1; }
+          echo "$ORIGIN nix-cache.lsinfra.de" | sudo tee -a /etc/hosts >/dev/null
+          curl -sf --max-time 20 "$ATTIC_ENDPOINT/$ATTIC_CACHE/nix-cache-info" >/dev/null \
+            || { echo "::error::origin $ORIGIN did not answer for $ATTIC_ENDPOINT"; exit 1; }
+
       - name: Login to Attic
         env:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
