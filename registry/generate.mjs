@@ -81,6 +81,29 @@ async function fetchJSON(url, retries = 3) {
   }
 }
 
+// npm's `os` field is a whitelist, and a leading `!` makes it a blacklist.
+// Supports Linux and macOS, not Windows: Nix and NixOS run on the former two only, so
+// a package that permits either one is buildable by someone. A `"win32"`-only package
+// is not, and keeping it means a guaranteed EBADPLATFORM failure on every build run.
+function supportsPosix(os) {
+  if (!Array.isArray(os) || os.length === 0) return true;
+  const denied = os.filter(o => o.startsWith('!')).map(o => o.slice(1));
+  if (denied.length) return !denied.includes('linux') || !denied.includes('darwin');
+  return os.includes('linux') || os.includes('darwin');
+}
+
+// Second look for processPackage: null metadata can mean "unpublished" as well as
+// "Windows-only", and only the latter should evict an existing entry.
+async function supportsPosixOnNpm(name) {
+  try {
+    const meta = await fetchJSON(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
+    const latest = meta['dist-tags']?.latest;
+    return supportsPosix(meta.versions?.[latest]?.os);
+  } catch {
+    return true; // cannot tell -> keep
+  }
+}
+
 async function getPackageMetadata(name) {
   const meta = await fetchJSON(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
   const latestVersion = meta['dist-tags']?.latest;
@@ -92,8 +115,15 @@ async function getPackageMetadata(name) {
   const deps = versionMeta.dependencies || {};
   const piManifest = versionMeta.pi || {};
   const tier = Object.keys(deps).length === 0 ? 'A' : 'B';
-  
-  return {
+
+  // Nix does not run on Windows, so a `"win32"`-only package can never be consumed
+  // here and would fail every build run with EBADPLATFORM. macOS-only packages are
+  // kept: Nix runs there, and the per-system flake output skips what does not apply.
+  // Omitted rather than set to null so the registry does not grow an `"os": null`
+  // line on ~13k entries.
+  if (!supportsPosix(versionMeta.os)) return null;
+
+  const entry = {
     name: versionMeta.name,
     version: latestVersion,
     tarball: versionMeta.dist.tarball,
@@ -106,6 +136,8 @@ async function getPackageMetadata(name) {
     description: versionMeta.description || '',
     downloads: 0,
   };
+  if (versionMeta.os) entry.os = versionMeta.os;
+  return entry;
 }
 
 // Shared npm cache across all lockfile generations
@@ -378,12 +410,22 @@ async function searchAllPages() {
 async function processPackage(obj, packages) {
   const pkgName = obj.package?.name;
   if (!pkgName) return;
-  
+
+  const key = pkgName.replace(/@/g, '').replace(/\//g, '-');
   try {
     const meta = await getPackageMetadata(pkgName);
-    if (!meta) return;
-    
-    const key = pkgName.replace(/@/g, '').replace(/\//g, '-');
+    if (!meta) {
+      // getPackageMetadata returns null for packages that exclude Linux. The entry is
+      // unreachable here (Nix does not run on Windows), so drop it rather than leaving
+      // a permanent build failure in the registry.
+      if (packages[key] && !(await supportsPosixOnNpm(pkgName))) {
+        delete packages[key];
+        try { execSync(`rm -rf '${join(PACKAGES_DIR, key)}'`, { timeout: 5000 }); } catch {}
+        process.stderr.write(`  dropped ${pkgName}: no Linux support\n`);
+      }
+      return;
+    }
+
     const prev = packages[key];
     const bumped = prev && prev.version !== meta.version;
     
@@ -425,7 +467,8 @@ async function main() {
       try {
         const meta = await getPackageMetadata(entry.name);
         if (!meta) {
-          process.stderr.write(`  skip ${key}: no npm metadata\n`);
+          // Drops the entry when npm says it excludes Linux; otherwise leaves it alone.
+          await processPackage({ package: { name: entry.name } }, packages);
           continue;
         }
         if (meta.version === entry.version) {

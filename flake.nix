@@ -30,17 +30,32 @@
       buildOne = pkgs: name: entry:
         nixpkgs.lib.nameValuePair "pi-${safeName name}"
           ((mkPiPackage { inherit pkgs; lib = nixpkgs.lib; }) (entry // { inherit packagesDir; key = name; }));
+
+      # A registry entry may declare npm's `os` field, which a package on a platform it
+      # does not support cannot build under. Windows-only entries are dropped at crawl
+      # time; macOS-only ones are kept because Nix runs there, so they must be skipped
+      # on Linux (and vice versa) instead of failing evaluation.
+      fitsSystem = system: entry:
+        let os = entry.os or null;
+            here = if nixpkgs.lib.hasInfix "darwin" system then "darwin" else "linux";
+            denied = builtins.filter (o: nixpkgs.lib.hasPrefix "!" o) os;
+        in if os == null then true
+           else if denied != [] then
+             !(builtins.elem ("!" + here) denied)
+           else builtins.elem here os;
+
       # Build all packages for a system
       buildPackages = pkgs:
-        nixpkgs.lib.mapAttrs' (name: buildOne pkgs name) registry.packages;
+        nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
+          (nixpkgs.lib.filterAttrs (_: fitsSystem pkgs.stdenv.hostPlatform.system) registry.packages);
         
       buildTierA = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
-          (nixpkgs.lib.filterAttrs (_: e: e.tier == "A") registry.packages);
+          (nixpkgs.lib.filterAttrs (_: e: e.tier == "A" && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
       
       buildTierB = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
-          (nixpkgs.lib.filterAttrs (_: e: e.tier == "B") registry.packages);
+          (nixpkgs.lib.filterAttrs (_: e: e.tier == "B" && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
         
     in {
       lib = {
