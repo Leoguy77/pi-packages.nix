@@ -79,17 +79,35 @@ else
       mkdir -p $out
       tar -xzf ${tarballSrc} --strip-components=1 -C $out
       cp ${lockPath} $out/package-lock.json
-      # npm ci fails offline with ENOTCACHED when package.json declares anything the
-      # lockfile does not contain. registry/generate.mjs strips devDependencies before
-      # generating the lockfile, but the tarball's package.json still lists them (and
-      # pi packages commonly list the host @earendil-works/* packages there), so mirror
-      # the strip here. Host peers are additionally marked optional for the same reason.
+      # npm ci fails offline when package.json declares anything the lockfile does not
+      # contain. registry/generate.mjs strips these before generating the lockfile, but the
+      # tarball's package.json still carries them at build time, so mirror every strip here:
+      #   devDependencies    -> ENOTCACHED when they name the host @earendil-works/* packages
+      #   devEngines         -> EBADDEVENGINES (npm refuses before installing anything)
+      #   workspaces         -> EUSAGE, "Missing: <member> from lock file"
+      #   workspace:* deps   -> EUNSUPPORTEDPROTOCOL, "Unsupported URL Type workspace:"
+      # Host peers are additionally marked optional for the same reason, and host entries in
+      # `overrides` are dropped because npm reports EOVERRIDE when an override pins a version
+      # the peerDependencies range does not match.
       ${pkgs.nodejs}/bin/node --input-type=commonjs -e '
         const fs = require("fs");
         const host = ${builtins.toJSON hostProvidedDeps};
         const p = process.argv[1];
         const j = JSON.parse(fs.readFileSync(p));
         delete j.devDependencies;
+        delete j.devEngines;
+        delete j.workspaces;
+        for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+          if (!j[field]) continue;
+          for (const [n, v] of Object.entries(j[field])) {
+            if (typeof v === "string" && v.startsWith("workspace:")) delete j[field][n];
+          }
+          if (Object.keys(j[field]).length === 0) delete j[field];
+        }
+        if (j.overrides) {
+          for (const d of host) delete j.overrides[d];
+          if (Object.keys(j.overrides).length === 0) delete j.overrides;
+        }
         j.peerDependenciesMeta = j.peerDependenciesMeta || {};
         for (const d of host) {
           if (j.peerDependencies && j.peerDependencies[d]) {
