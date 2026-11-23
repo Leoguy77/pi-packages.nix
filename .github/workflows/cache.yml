@@ -33,8 +33,9 @@ jobs:
             extra-substituters = ${{ env.ATTIC_ENDPOINT }}/${{ env.ATTIC_CACHE }}
             extra-trusted-public-keys = ${{ env.ATTIC_PUBLIC_KEY }}
 
-      - name: Enable Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
+      # No magic-nix-cache: GitHub throttles the Actions cache hard, and the
+      # action then answers 418 for the rest of the run instead of stepping
+      # aside, which fails every build after it. Attic is the substituter here.
 
       - name: Build attic CLI
         run: nix build nixpkgs#attic-client --out-link /tmp/attic
@@ -49,6 +50,7 @@ jobs:
           TOKEN: ${{ secrets.ATTIC_CI_TOKEN }}
         run: node .github/scripts/cache-push.mjs
         timeout-minutes: 330
+
       - name: Upload failure worklist
         if: always()
         uses: actions/upload-artifact@v4
