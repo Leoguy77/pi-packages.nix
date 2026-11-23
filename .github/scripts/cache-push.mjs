@@ -95,10 +95,12 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
     } else {
       // A single bad path fails the whole call, so retry one at a time to find
       // out which and keep the rest.
-      for (const p of pushable) {
+      for (const k of built) {
+        const p = outPath(k);
+        if (!pushable.includes(p)) continue;
         const r = spawnSync(ATTIC, ['push', CACHE, p], { timeout: 300_000 });
         if (r.status === 0) pushed++;
-        else failed.push({ name: p, outPath: p, err: firstError(r.stderr) });
+        else failed.push({ name: k, outPath: p, err: firstError(r.stderr) });
       }
     }
   }
