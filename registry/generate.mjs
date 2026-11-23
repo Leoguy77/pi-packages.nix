@@ -189,6 +189,12 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
     execSync(`rm -rf ${workDir} ; mkdir -p ${workDir}/pkg`, { stdio: 'pipe', timeout: 10000 });
     execSync(`curl -sL --max-time 30 '${tarballUrl}' -o ${workDir}/pkg.tgz`, { stdio: 'pipe', timeout: 35000 });
     execSync(`tar -xzf ${workDir}/pkg.tgz --strip-components=1 -C ${workDir}/pkg`, { stdio: 'pipe', timeout: 10000 });
+    // Packages that ship a vendored node_modules (npm "bundleDependencies") make npm
+    // record those deps as inBundle with no resolved/integrity. prefetch-npm-deps then
+    // skips them ("7 out of 19 packages are missing 'resolved' URLs") and npm ci
+    // --offline fails with ENOTCACHED. Removing the tree makes npm resolve them from the
+    // registry like any other dependency, which is what the offline cache needs.
+    execSync(`rm -rf ${workDir}/pkg/node_modules`, { stdio: 'pipe', timeout: 10000 });
     // Strip workspace:* deps — unresolvable by standalone npm
     const pjPath = join(workDir, 'pkg', 'package.json');
     if (existsSync(pjPath)) {
