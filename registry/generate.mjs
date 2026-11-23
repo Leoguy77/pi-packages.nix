@@ -19,6 +19,13 @@ const LOCKS_ONLY = process.env.LOCKS_ONLY === '1';
 //                       version differs from the one the search index just
 //                       returned -- free, since search results carry it.
 const REFRESH_STALE = process.env.REFRESH_STALE === '1' || process.env.REFRESH === '1';
+// Drop registry entries whose tarball is gone from npm. Unpublished packages stay in
+// the registry forever otherwise, because the crawler only ever adds and updates, and
+// they fail every cache build with `curl: (22) Requested URL returned error: 404`
+// (71 packages in run 45196913983). Opt-in: a run without PRUNE does not delete.
+const PRUNE = process.env.PRUNE === '1';
+// PRUNE_ONLY=1 prunes and exits, skipping the search crawl entirely.
+const PRUNE_ONLY = process.env.PRUNE_ONLY === '1';
 const REFRESH_KEYS = (process.env.REFRESH_KEYS || '')
   .split(/[ ,]+/).map(s => s.trim()).filter(Boolean);
 // PACKAGES=a,b,c limits a LOCKS_ONLY run to the named registry keys.
@@ -30,6 +37,9 @@ const PAGE_SIZE = 250;
 const PACKAGES_DIR = new URL('../packages', import.meta.url).pathname;
 const REGISTRY_PATH = new URL('../registry/registry.json', import.meta.url).pathname;
 const STATE_PATH = new URL('../registry/.generate-state.json', import.meta.url).pathname;
+// Written by PRUNE=1: what was dropped and why, so a bad prune is reviewable
+// rather than a silent 200-line diff in registry.json.
+const PRUNE_LOG = new URL('../registry/.pruned.json', import.meta.url).pathname;
 // Scratch space lives on real disk, not the system tmpdir: /tmp is often tmpfs
 // (RAM), and an 8GiB npm cache there will exhaust RAM and fail every install with
 // ENOSPC (npm exit 228). Override with PI_REGISTRY_TMPDIR if needed.
@@ -254,6 +264,57 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
   }
 }
 
+// Delete registry entries whose tarball npm no longer serves. Two independent
+// checks before anything is dropped: the packument must be missing or mark the
+// version unpublished, AND the tarball URL must 404. A single 404 is not enough --
+// a CDN hiccup or a rate-limit page must never cost a package.
+async function pruneDead(packages) {
+  const keys = Object.keys(packages);
+  process.stderr.write(`Pruning: checking ${keys.length} tarballs...\n`);
+  const removed = [];
+  let checked = 0;
+
+  for (let i = 0; i < keys.length; i += CONCURRENCY) {
+    await Promise.all(keys.slice(i, i + CONCURRENCY).map(async (key) => {
+      const entry = packages[key];
+      checked++;
+      if (checked % 500 === 0) process.stderr.write(`  ${checked}/${keys.length}, removed ${removed.length}\n`);
+      if (!entry?.tarball) return;
+      try {
+        await rateLimit();
+        const res = await fetch(entry.tarball, { method: 'HEAD' });
+        if (res.status !== 404) return;
+        // Second signal: a live package must also look gone in its packument.
+        let gone = false;
+        try {
+          const meta = await fetchJSON(`https://registry.npmjs.org/${entry.name.replace('/', '%2F')}`, 1);
+          gone = !meta?.versions?.[entry.version];
+        } catch (e) {
+          // A 404 on the packument is itself proof; anything else is inconclusive.
+          if (/HTTP 404/.test(e.message)) gone = true;
+        }
+        if (!gone) {
+          process.stderr.write(`  keep ${key}: tarball 404 but npm still lists ${entry.version}\n`);
+          return;
+        }
+        removed.push({ key, name: entry.name, version: entry.version });
+        delete packages[key];
+        // Its lockfile would otherwise sit in packages/ forever, one orphan per
+        // pruned package, with nothing in the registry pointing at it.
+        try { execSync(`rm -rf '${join(PACKAGES_DIR, key)}'`, { timeout: 10000 }); } catch {}
+      } catch { /* network noise: keep the entry */ }
+    }));
+  }
+
+  if (removed.length) {
+    writeFileSync(PRUNE_LOG, JSON.stringify(removed, null, 2) + '\n');
+    process.stderr.write(`Pruned ${removed.length} packages (log: ${PRUNE_LOG})\n`);
+  } else {
+    process.stderr.write('Pruned 0 packages\n');
+  }
+  return removed;
+}
+
 async function searchAllPages() {
   let allObjects = [];
   let from = 0;
@@ -378,6 +439,13 @@ async function main() {
     return;
   }
   
+  // Prune-only run: check the registry without paying for a full search crawl.
+  if (PRUNE_ONLY) {
+    await pruneDead(packages);
+    writeFileSync(REGISTRY_PATH, JSON.stringify({ packages }, null, 2) + '\n');
+    return;
+  }
+
   if (LOCKS_ONLY) {
     const tierB = Object.entries(packages)
       .filter(([k, e]) => e.tier === 'B' && (!ONLY.length || ONLY.includes(k)));
@@ -457,9 +525,11 @@ async function main() {
     }
   }
   
+  // After the crawl, so packages added this run are checked too. Runs before the
+  // final write so a prune lands in the same commit as the rest of the run.
+  if (PRUNE) await pruneDead(packages);
+
   writeFileSync(REGISTRY_PATH, JSON.stringify({ packages }, null, 2));
-  
-  // Cleanup state
   if (existsSync(STATE_PATH)) execSync(`rm ${STATE_PATH}`);
   
   console.error(`\nRegistry: ${Object.keys(packages).length} packages`);

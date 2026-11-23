@@ -46,6 +46,19 @@ jobs:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
           REFRESH_STALE: ${{ github.event.inputs.refresh || '1' }}
+          # Drop packages npm unpublished. Without this the registry is append-only,
+          # so dead entries fail every cache build with a permanent 404 (71 in run
+          # 45196913983) and the failure list never shortens.
+          PRUNE: '1'
+      - name: Report pruned packages
+        if: always()
+        run: |
+          if [ -f registry/.pruned.json ]; then
+            echo "Removed $(node -p 'require("./registry/.pruned.json").length' 2>/dev/null) packages:"
+            node -p 'require("./registry/.pruned.json").map(p => "  " + p.key + "@" + p.version).join("\n")' 2>/dev/null | head -50
+          else
+            echo "Nothing pruned."
+          fi
       - name: Generate lockfiles for new Tier B packages
         run: node registry/generate.mjs
         env:
