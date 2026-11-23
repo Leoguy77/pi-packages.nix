@@ -137,6 +137,22 @@ jobs:
           "
       - name: Update README stats
         run: node scripts/update-readme-stats.mjs
+      - name: Update repository description
+        # The About blurb quotes the package count, which this job just changed.
+        # GITHUB_TOKEN cannot edit repository metadata, so this needs a PAT with
+        # `repo` scope; skipped rather than failed when the secret is absent.
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "REPO_ADMIN_TOKEN not set; leaving the description alone"
+            exit 0
+          fi
+          total=$(node -e 'console.log(Object.keys(JSON.parse(require("fs").readFileSync("registry/registry.json","utf8")).packages).length)')
+          desc="Nix-native pi.dev packages — ${total} pi extensions, skills, and themes as Nix derivations with an Attic binary cache"
+          current=$(gh api repos/${{ github.repository }} --jq .description)
+          [ "$current" = "$desc" ] && { echo "description up to date"; exit 0; }
+          gh repo edit --description "$desc" && echo "description updated to: $desc"
       - name: Check for changes
         id: changes
         if: always()
