@@ -86,26 +86,52 @@ else
       #   devEngines         -> EBADDEVENGINES (npm refuses before installing anything)
       #   workspaces         -> EUSAGE, "Missing: <member> from lock file"
       #   workspace:* deps   -> EUNSUPPORTEDPROTOCOL, "Unsupported URL Type workspace:"
-      # Host peers are additionally marked optional for the same reason, and host entries in
-      # `overrides` are dropped because npm reports EOVERRIDE when an override pins a version
-      # the peerDependencies range does not match.
+      # Additionally: host packages are removed from peerDependencies outright (marking them
+      # optional is not enough once `npm ci` is asked to omit peers -- it still demanded
+      # them), any declaration the lockfile has no version for is dropped (a package
+      # aliasing to `npm:null@...` resolves to nothing), and host entries in `overrides`
+      # are dropped because npm reports EOVERRIDE when an override pins a version the
+      # declared range does not match.
       ${pkgs.nodejs}/bin/node --input-type=commonjs -e '
         const fs = require("fs");
         const host = ${builtins.toJSON hostProvidedDeps};
         const p = process.argv[1];
         const j = JSON.parse(fs.readFileSync(p));
+        const lockPath = p.replace(/package\.json$/, "package-lock.json");
+        const lock = fs.existsSync(lockPath) ? JSON.parse(fs.readFileSync(lockPath, "utf8")) : { packages: {} };
         delete j.devDependencies;
         delete j.devEngines;
         delete j.workspaces;
         for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
           if (!j[field]) continue;
           for (const [n, v] of Object.entries(j[field])) {
-            if (typeof v === "string" && v.startsWith("workspace:")) delete j[field][n];
+            if (typeof v === "string" && v.startsWith("workspace:")) { delete j[field][n]; continue; }
+            if (host.includes(n)) { delete j[field][n]; continue; }
+            const e = lock.packages && lock.packages["node_modules/" + n];
+            if (!e || !e.version) delete j[field][n];
           }
           if (Object.keys(j[field]).length === 0) delete j[field];
         }
         if (j.overrides) {
-          for (const d of host) delete j.overrides[d];
+          // Override keys may carry a version suffix, e.g.
+          // "@earendil-works/pi-coding-agent@1.4.0", which an exact-name match misses.
+          for (const k of Object.keys(j.overrides)) {
+            if (host.some(d => k === d || k.startsWith(d + "@"))) delete j.overrides[k];
+          }
+          // npm requires an override to equal the declared spec exactly, not merely to be
+          // compatible: override "1.2.0" against a declared "~1.2.0" is EOVERRIDE, not a
+          // no-op. This applies to peerDependencies too (pi-switch-pi-codex-app-server
+          // declares chord as ~1.2.0 in peers and 1.2.0 in overrides). Drop the override
+          // and let the declaration win.
+          const declared = {
+            ...(j.dependencies || {}), ...(j.devDependencies || {}),
+            ...(j.optionalDependencies || {}), ...(j.peerDependencies || {}),
+          };
+          for (const k of Object.keys(j.overrides)) {
+            const base = k.replace(/@[^@/]+$/, "");
+            const want = j.overrides[k];
+            if (declared[base] && typeof want === "string" && want !== declared[base]) delete j.overrides[k];
+          }
           if (Object.keys(j.overrides).length === 0) delete j.overrides;
         }
         j.peerDependenciesMeta = j.peerDependenciesMeta || {};

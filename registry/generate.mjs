@@ -185,6 +185,12 @@ async function runNpmLock(workDir) {
   
   // Step 2: Full install to fill integrity, prefer-offline for speed
   await new Promise((resolve, reject) => {
+    // npm chokes on a lockfile that step 1 produced with --package-lock-only when a
+    // dependency resolves to an alias or a nested tree: "Cannot destructure property
+    // 'package' of 'node.target' as it is null". A fresh install of the same
+    // package.json succeeds, so drop the step-1 lockfile and let this step resolve from
+    // scratch. The lockfile is written from this result anyway.
+    try { execSync('rm -f package-lock.json', { cwd: join(workDir, 'pkg'), timeout: 10000 }); } catch {}
     const c2 = spawn(NPM, [
       'install', '--ignore-scripts',
       '--no-audit', '--no-fund', '--legacy-peer-deps',
@@ -212,6 +218,41 @@ function lockfileVersion(lockPath) {
   }
 }
 
+// True when the lockfile declares a dependency it cannot resolve. npm ci stops with
+// "Missing: <name>@ from lock file" instead of installing, so such a lockfile is
+// unusable offline. Platform-specific optional deps are the common cause: only the
+// binary for the generating platform resolves, the rest stay as bare names.
+function lockfileHasDanglingRefs(lockPath) {
+  let lock;
+  try { lock = JSON.parse(readFileSync(lockPath, 'utf8')); } catch { return false; }
+  const pk = lock.packages || {};
+  // npm resolves by walking up the tree, so a name is satisfied by any ancestor.
+  const resolve = (from, n) => {
+    for (let base = from; ; ) {
+      const k = `${base ? base + '/' : ''}node_modules/${n}`;
+      if (pk[k]?.version) return k;
+      if (!base) return null;
+      // Strip one level. Workspace/link keys ("extensions/foo") contain no node_modules
+      // segment, so the replace is a no-op; their parent in npm's walk is the root, which
+      // must still be tried or a resolvable dep gets pruned. Terminates because base
+      // becomes "" and the loop returns at the top on the next pass.
+      const next = base.replace(/\/?node_modules\/(?:@[^/]+\/)?[^/]+$/, '');
+      base = next === base ? '' : next;
+    }
+  };
+  for (const [k, e] of Object.entries(pk)) {
+    // A link entry points at a path ("../pi-libtui") that the published tarball does not
+    // contain, so npm ci cannot restore it and prefetch-npm-deps cannot cache it. Such a
+    // lockfile may have no dangling declaration at all and still install nothing.
+    if (e?.link) return true;
+    for (const f of ['dependencies', 'optionalDependencies']) {
+      if (!e[f]) continue;
+      for (const n of Object.keys(e[f])) if (!resolve(k, n)) return true;
+    }
+  }
+  return false;
+}
+
 async function generateLockfile(name, tarballUrl, key, targetVersion) {
   const pkgDir = join(PACKAGES_DIR, key);
   const lockPath = join(pkgDir, 'package-lock.json');
@@ -222,8 +263,14 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
   // job far too slow to run often. Compare versions instead of trusting a flag.
   if (existsSync(lockPath)) {
     const have = lockfileVersion(lockPath);
-    if (!targetVersion || have === targetVersion) return;
-    process.stderr.write(`  lockfile ${key} is ${have ?? 'unversioned'}, want ${targetVersion} — regenerating\n`);
+    if (!targetVersion || have === targetVersion) {
+      // A same-version lockfile can still be unusable if it was generated before the
+      // dangling-ref prune existed, so check it rather than trusting the version.
+      if (!lockfileHasDanglingRefs(lockPath)) return;
+      process.stderr.write(`  lockfile ${key} has unresolvable dependencies — regenerating\n`);
+    } else {
+      process.stderr.write(`  lockfile ${key} is ${have ?? 'unversioned'}, want ${targetVersion} — regenerating\n`);
+    }
   }
   
   const workDir = join(TMP, key);
@@ -248,6 +295,18 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           if (pj.dependencies?.[n]) delete pj.dependencies[n];
           if (pj.devDependencies?.[n]) delete pj.devDependencies[n];
           if (pj.peerDependencies?.[n]) delete pj.peerDependencies[n];
+        }
+      }
+      // Local path specs ("file:../pi-libtui", "link:../x", "../runtime") point at
+      // workspace members, which the published tarball does not contain. When that name
+      // exists on npm, "*" makes npm resolve the published version: pi-side declares
+      // @luan.sh/pi-libactions as file:../pi-libactions and the published package pulls
+      // in 240 real dependencies the lockfile would otherwise miss entirely. When the
+      // name is not published npm fails and the package keeps its uncached fallback.
+      for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+        if (!pj[field]) continue;
+        for (const [n, v] of Object.entries(pj[field])) {
+          if (typeof v === 'string' && /^(file|link):|^\.\.?\//.test(v)) pj[field][n] = '*';
         }
       }
       // Strip devEngines — npm's --engine-strict=false doesn't handle pnpm packageManager
@@ -282,6 +341,64 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
     const lockFile = join(workDir, 'pkg', 'package-lock.json');
     if (existsSync(lockFile)) {
       const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
+      const pk = lock.packages || {};
+      // Drop workspace link entries. npm records them as `"link": true` with a relative
+      // `resolved` such as "../runtime", which does not exist inside the published
+      // tarball, so prefetch-npm-deps skips the entry and npm ci cannot restore it.
+      // The strip is safe because a link target is either another workspace (already
+      // removed with `workspaces`) or a path outside the tarball.
+      let droppedLinks = 0;
+      for (const [k, e] of Object.entries(pk)) {
+        if (!e || !e.link) continue;
+        delete pk[k];
+        droppedLinks++;
+      }
+      if (droppedLinks) {
+        for (const e of Object.values(pk)) {
+          for (const f of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+            if (!e[f]) continue;
+            for (const [n, t] of Object.entries(e[f])) {
+              if (typeof t === 'string' && (t.startsWith('file:') || t.startsWith('link:'))) delete e[f][n];
+            }
+            if (Object.keys(e[f]).length === 0) delete e[f];
+          }
+        }
+      }
+      // Declarations whose target has no version cannot be installed offline: npm ci
+      // reports "Missing: <name>@ from lock file" and stops. This happens at every
+      // level, not just the root -- @edxeth/fff-node lists eight platform binaries as
+      // optional deps but only the Linux x64 one resolved on this platform, so the
+      // other seven sit in the lockfile as bare names. --omit=optional does not stop
+      // the sync check, so prune them here, where the hash still covers the result.
+      let prunedDecls = 0;
+      // npm resolves a dependency by walking up the tree, so a declaration is only
+      // unresolvable when no ancestor has it either. Checking just the nested path
+      // would prune hoisted entries, which are the normal case.
+      const resolve = (from, n) => {
+        for (let base = from; ; ) {
+          const k = `${base ? base + '/' : ''}node_modules/${n}`;
+          if (pk[k]?.version) return k;
+          if (!base) return null;
+          // Workspace/link keys ("extensions/foo") have no node_modules segment, so the
+          // strip below cannot shorten them. Their parent in npm's walk is the root, which
+          // must still be tried -- returning null here would prune a resolvable dep.
+          const next = base.replace(/\/?node_modules\/(?:@[^/]+\/)?[^/]+$/, '');
+          base = next === base ? '' : next;
+        }
+      };
+      for (const [k, e] of Object.entries(pk)) {
+        for (const f of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+          if (!e[f]) continue;
+          for (const n of Object.keys(e[f])) {
+            if (!resolve(k, n)) { delete e[f][n]; prunedDecls++; }
+          }
+          if (Object.keys(e[f]).length === 0) delete e[f];
+        }
+      }
+      // Pi packages declare the host (pi itself) as peerDependencies. When they are not
+      // marked optional, `npm ci` inside buildNpmPackage demands them in the fixed-output
+      // derivation and fails with ENOTCACHED (@earendil-works/pi-ai). Mark every host peer
+      // optional in the lockfile so the build treats them as provided by the runtime.
       const rootPkg = lock.packages?.[''];
       if (rootPkg?.peerDependencies) {
         const hostPeers = HOST_DEPS.filter((d) => d in rootPkg.peerDependencies);
@@ -293,6 +410,11 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
           process.stderr.write(`  marked host peers optional: ${hostPeers.join(', ')}\n`);
         }
+      }
+      if (prunedDecls || droppedLinks) {
+        writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
+        if (prunedDecls) process.stderr.write(`  pruned ${prunedDecls} unresolvable declaration(s)\n`);
+        if (droppedLinks) process.stderr.write(`  dropped ${droppedLinks} workspace link(s)\n`);
       }
     }
     
