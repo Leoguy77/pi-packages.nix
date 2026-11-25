@@ -176,6 +176,11 @@ else
     npmFlags = [ "--ignore-scripts" "--omit=optional" "--omit=peer" "--no-audit" "--no-fund" ];
     npmInstallFlags = [ "--legacy-peer-deps" ];
     makeCacheWritable = true;
+    # Some packages depend on a git dependency (baileys, register-scheme) that ships
+    # install scripts without its own lockfile. prefetch-npm-deps refuses those by
+    # default. The scripts never run here -- npmFlags carries --ignore-scripts -- so
+    # allowing the fetch only affects what gets cached, not what gets executed.
+    forceGitDeps = true;
     # npm install runs during configurePhase; unset SSL_CERT_FILE first
     preConfigure = ''
       unset SSL_CERT_FILE NIX_SSL_CERT_FILE
