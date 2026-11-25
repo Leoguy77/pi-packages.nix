@@ -317,6 +317,13 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           if (!/^(file|link):|^\.\.?\//.test(v)) continue;
           // link: specs are always external symlinks, never a directory in the tarball.
           const rel = v.replace(/^(file|link):/, '');
+          // A vendored tarball (file:./vendor/fumadb-0.3.0-382dcd65.tgz) is recorded with
+          // that same file: URL as its resolved location, and prefetch-npm-deps rejects it
+          // outright ("couldn't fetch node_modules/fumadb at file:///vendor/...: invalid
+          // format"). "fumadb" is published on npm, so "*" makes npm take the registry
+          // copy and the cache can be built. An unpublished one still fails here and
+          // falls back to the inline install, which is the same as before this change.
+          if (!v.startsWith('file:') || /\.tgz$|\.tar\.gz$/i.test(rel)) { pj[field][n] = '*'; continue; }
           const subPkg = v.startsWith('file:') ? join(workDir, 'pkg', rel, 'package.json') : null;
           if (subPkg && existsSync(subPkg)) {
             try {

@@ -112,8 +112,10 @@ else
           if (!j[field]) continue;
           for (const [n, v] of Object.entries(j[field])) {
             if (typeof v !== "string" || !/^(file|link):|^\.\.?\//.test(v)) continue;
+            // A vendored tarball is recorded with a file: resolved URL that
+            // prefetch-npm-deps rejects, so the generator rewrites it to "*" too.
             const e = lock.packages && lock.packages["node_modules/" + n];
-            if (e && e.version) j[field][n] = "*";
+            if (e && e.version && (!e.resolved || !/^file:.*\.t(ar\.)?gz$/i.test(e.resolved))) j[field][n] = "*";
           }
         }
         for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
