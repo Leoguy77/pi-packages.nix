@@ -297,16 +297,38 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           if (pj.peerDependencies?.[n]) delete pj.peerDependencies[n];
         }
       }
-      // Local path specs ("file:../pi-libtui", "link:../x", "../runtime") point at
-      // workspace members, which the published tarball does not contain. When that name
-      // exists on npm, "*" makes npm resolve the published version: pi-side declares
-      // @luan.sh/pi-libactions as file:../pi-libactions and the published package pulls
-      // in 240 real dependencies the lockfile would otherwise miss entirely. When the
-      // name is not published npm fails and the package keeps its uncached fallback.
+      // Local path specs come in two kinds and they need opposite handling.
+      //
+      // Inside the tarball ("file:./vendor/pi-diff-review"): keep the spec, npm can use
+      // it. Its own devDependencies still have to go, because npm resolves them too and
+      // they are neither needed at runtime nor published -- omni-pi vendors a sub-package
+      // asking for @types/node@^24.5.2 while the lockfile pins 26.6.6, which does not
+      // satisfy it, so npm ci goes to the network for the manifest and fails ENOTCACHED.
+      //
+      // Outside the tarball ("file:../pi-libtui", "../runtime", "link:../x"): the path
+      // does not exist here at all, so "*" makes npm resolve the published version where
+      // one exists -- pi-side declares @luan.sh/pi-libactions as file:../pi-libactions and
+      // the published package pulls in 240 real dependencies the lockfile otherwise
+      // misses. Where no such package exists npm fails and the uncached fallback applies.
       for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
         if (!pj[field]) continue;
         for (const [n, v] of Object.entries(pj[field])) {
-          if (typeof v === 'string' && /^(file|link):|^\.\.?\//.test(v)) pj[field][n] = '*';
+          if (typeof v !== 'string') continue;
+          if (!/^(file|link):|^\.\.?\//.test(v)) continue;
+          // link: specs are always external symlinks, never a directory in the tarball.
+          const rel = v.replace(/^(file|link):/, '');
+          const subPkg = v.startsWith('file:') ? join(workDir, 'pkg', rel, 'package.json') : null;
+          if (subPkg && existsSync(subPkg)) {
+            try {
+              const sj = JSON.parse(readFileSync(subPkg, 'utf8'));
+              delete sj.devDependencies;
+              delete sj.devEngines;
+              delete sj.workspaces;
+              writeFileSync(subPkg, JSON.stringify(sj, null, 2) + '\n');
+            } catch {}
+            continue; // vendored: npm can install it, keep the spec
+          }
+          pj[field][n] = '*';
         }
       }
       // Strip devEngines — npm's --engine-strict=false doesn't handle pnpm packageManager
@@ -353,6 +375,20 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
         delete pk[k];
         droppedLinks++;
       }
+      // A nested copy of a workspace package keeps a `version` but loses its `resolved`
+      // URL, so prefetch-npm-deps skips it and npm ci then reaches for the network
+      // (@xterm/headless in pi-copy-mode). Drop such a copy only when the same
+      // name@version is also present with a resolved URL, which npm uses instead;
+      // dropping an only copy would just turn into "Missing: <name>@ from lock file".
+      const nameOf = k => k.slice(k.lastIndexOf('node_modules/') + 'node_modules/'.length);
+      for (const [k, e] of Object.entries(pk)) {
+        if (!k || !e || e.link || !e.version || e.resolved) continue;
+        const twin = Object.entries(pk).some(([k2, e2]) =>
+          k2 !== k && e2?.resolved && e2.version === e.version && nameOf(k2) === nameOf(k));
+        if (!twin) continue;
+        delete pk[k];
+        droppedLinks++;
+      }
       if (droppedLinks) {
         for (const e of Object.values(pk)) {
           for (const f of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
@@ -395,6 +431,35 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           if (Object.keys(e[f]).length === 0) delete e[f];
         }
       }
+      // The host packages (pi itself) are provided by the runtime, never installed, and
+      // mkPiPackage.nix deletes every declaration of them from package.json before npm
+      // runs. Entries for them in the lockfile are therefore dead weight -- and when one
+      // arrives nested (a plugin that shipped the host as a devDependency) npm records it
+      // with a resolved URL but no integrity, so prefetch-npm-deps refuses the whole
+      // lockfile: "non-git dependencies should have associated integrity". Drop them at
+      // every depth, plus any declaration pointing at them, so the lockfile matches the
+      // manifest the build actually uses.
+      let droppedHost = 0;
+      const hostNames = new Set(HOST_DEPS);
+      const nameOfEntry = (k) => k.slice(k.lastIndexOf('node_modules/') + 'node_modules/'.length);
+      // Anything nested under a host package goes too: it is part of the host's own
+      // dependency tree (@earendil-works/pi-client, pi-protocol, pi-telemetry), which
+      // the runtime supplies, and npm records those copies without integrity.
+      const underHost = (k) => HOST_DEPS.some((h) => k.includes('node_modules/' + h + '/node_modules/'));
+      for (const [k, e] of Object.entries(pk)) {
+        if (!k || !e) continue;
+        if (hostNames.has(nameOfEntry(k)) || underHost(k)) { delete pk[k]; droppedHost++; }
+      }
+      if (droppedHost) {
+        for (const e of Object.values(pk)) {
+          if (!e) continue;
+          for (const f of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+            if (!e[f]) continue;
+            for (const n of Object.keys(e[f])) if (hostNames.has(n)) delete e[f][n];
+            if (Object.keys(e[f]).length === 0) delete e[f];
+          }
+        }
+      }
       // Pi packages declare the host (pi itself) as peerDependencies. When they are not
       // marked optional, `npm ci` inside buildNpmPackage demands them in the fixed-output
       // derivation and fails with ENOTCACHED (@earendil-works/pi-ai). Mark every host peer
@@ -411,10 +476,11 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           process.stderr.write(`  marked host peers optional: ${hostPeers.join(', ')}\n`);
         }
       }
-      if (prunedDecls || droppedLinks) {
+      if (prunedDecls || droppedLinks || droppedHost) {
         writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
         if (prunedDecls) process.stderr.write(`  pruned ${prunedDecls} unresolvable declaration(s)\n`);
         if (droppedLinks) process.stderr.write(`  dropped ${droppedLinks} workspace link(s)\n`);
+        if (droppedHost) process.stderr.write(`  dropped ${droppedHost} host package entr(ies)\n`);
       }
     }
     

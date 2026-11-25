@@ -58,16 +58,13 @@ const failed = [];
 // `--no-link` leaves every output unrooted, so nix's own auto-GC (the runner
 // sets min-free) can delete a path between the build and the push. attic then
 // rejects the whole batch with "path ... is not valid", which sank 13 packages
-// per run. Ask nix which paths survive and only push those.
-const validPaths = paths => {
-  const r = spawnSync('nix', ['path-info', '--json-format', '1', '--json', ...paths],
-    { timeout: 300_000, maxBuffer: 16 * 1024 * 1024 });
-  if (r.status !== 0) return paths;
-  try {
-    const info = JSON.parse(r.stdout.toString());
-    return paths.filter(p => info[p]);
-  } catch { return paths; }
-};
+// per run. Only push paths that are still on disk.
+//
+// This used to ask `nix path-info` instead, which was worse than useless: when the
+// list was empty or the answer came back null it reported every successful build in
+// the batch as garbage-collected -- 180 of them, with `Pushed: 0`, in run
+// 45442807069 -- and the files were on disk the whole time.
+const pushablePaths = paths => paths.filter(p => p && existsSync(p));
 
 for (let i = 0; i < toBuild.length; i += BATCH) {
   const batch = toBuild.slice(i, i + BATCH);
@@ -83,13 +80,18 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
   const built = batch.filter(k => existsSync(outPath(k) || ''));
 
   if (built.length) {
-    const pushable = validPaths(built.map(outPath));
+    const pushable = pushablePaths(built.map(outPath));
     for (const k of built) {
       if (!pushable.includes(outPath(k))) failed.push({ name: k, outPath: outPath(k), err: 'output was garbage-collected before the push' });
     }
     const all = pushable.length
       ? spawnSync(ATTIC, ['push', CACHE, ...pushable], { timeout: 1_800_000 })
-      : { status: 0 };
+      : { status: 0, stderr: '' };
+    if (pushable.length && all.status !== 0) {
+      // stderr used to be swallowed here, so a whole-batch rejection left no trace
+      // in the log and every package in it looked like a silent failure.
+      console.log(`batch push failed (exit ${all.status}): ${(all.stderr || '').toString().slice(0, 500)}`);
+    }
     if (all.status === 0) {
       pushed += pushable.length;
     } else {
@@ -116,14 +118,14 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
       failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) });
       continue;
     }
-    const ok = validPaths([outPath(k)]);
+    const ok = pushablePaths([outPath(k)]);
     if (!ok.length) {
       failed.push({ name: k, outPath: outPath(k) || null, err: 'output was garbage-collected before the push' });
       continue;
     }
     const p = spawnSync(ATTIC, ['push', CACHE, ok[0]], { timeout: 300_000 });
     if (p.status === 0) pushed++;
-    else failed.push({ name: k, outPath: outPath(k) || null, err: firstError(p.stderr) });
+    else failed.push({ name: k, outPath: outPath(k) || null, err: firstError(p.stderr) || `attic exit ${p.status}` });
   }
 
   console.log(`Pushed: ${pushed}`);

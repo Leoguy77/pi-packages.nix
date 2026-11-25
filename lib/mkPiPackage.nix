@@ -102,6 +102,20 @@ else
         delete j.devDependencies;
         delete j.devEngines;
         delete j.workspaces;
+        // The registry generator rewrites a local path spec to "*" when the path is
+        // outside the tarball, so the lockfile records the published package. npm ci
+        // compares that lockfile against this manifest and refuses to run when the two
+        // disagree ("Missing: @luan.sh/pi-libactions@ from lock file"), so the same
+        // rewrite has to happen here. A vendored path (inside the tarball) keeps its
+        // spec, matching what the generator did for it.
+        for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+          if (!j[field]) continue;
+          for (const [n, v] of Object.entries(j[field])) {
+            if (typeof v !== "string" || !/^(file|link):|^\.\.?\//.test(v)) continue;
+            const e = lock.packages && lock.packages["node_modules/" + n];
+            if (e && e.version) j[field][n] = "*";
+          }
+        }
         for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
           if (!j[field]) continue;
           for (const [n, v] of Object.entries(j[field])) {
