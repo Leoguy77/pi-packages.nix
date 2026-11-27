@@ -31,24 +31,51 @@ const names = Object.entries(reg.packages)
   .map(([k]) => k);
 console.log(`Packages: ${names.length}`);
 
-// One eval for every outPath. The build output path is decided here, so the
-// per-package `nix build --print-out-paths` calls are not needed later.
+// One eval for every outPath, plus its npmDeps path. The build output path is
+// decided here, so the per-package `nix build --print-out-paths` calls are not
+// needed later.
+//
+// npmDeps is why this is not just outPath: it is a fixed-output derivation that
+// npm reads as an *input*, so `attic push <output>` never uploads it -- the closure
+// contains references, not inputs. The result was that every npmDeps narinfo
+// returned 404 while the output returned 200, so each cache hit on a package still
+// ran a full `npm install` (207 npm runs in run 45811788056 for 449 packages).
 const evaluated = spawnSync('nix', ['eval', '--json', '--apply',
-  'x: builtins.mapAttrs (n: v: v.outPath) x', '.#packages.x86_64-linux'],
+  'x: builtins.mapAttrs (n: v: { out = v.outPath; deps = if v ? npmDeps then v.npmDeps.outPath else null; }) x',
+  '.#packages.x86_64-linux'],
   { timeout: 300_000, maxBuffer: 16 * 1024 * 1024 });
 const allOut = JSON.parse(evaluated.stdout.toString());
-const outPath = k => allOut['pi-' + safe(k)];
+const outPath = k => allOut['pi-' + safe(k)]?.out;
+const depsPath = k => allOut['pi-' + safe(k)]?.deps;
 
 // Skip what Attic already has. This is also what makes a killed run resumable:
 // the next run pays ~15 minutes of probing and then starts where the last died.
-const toBuild = names.filter(k => {
-  const p = outPath(k);
-  if (!p?.startsWith('/nix/store/')) return true;
+const narinfo = (base, p) => {
+  if (!p?.startsWith('/nix/store/')) return false;
   const hash = p.split('/').pop().split('-')[0];
-  const r = spawnSync('curl',
-    ['-sfI', '--max-time', '5', `${ENDPOINT}/${CACHE}/${hash}.narinfo`], { timeout: 8000 });
-  return r.status !== 0;
-});
+  return spawnSync('curl',
+    ['-sfI', '--max-time', '5', `${base}/${hash}.narinfo`], { timeout: 8000 }).status === 0;
+};
+// Both probes are memoised: a batch asks about the same path three times (skip
+// check, push list, shipped check) and each answer costs an HTTP round trip.
+const probeCache = new Map();
+const probe = (base, p) => {
+  const key = `${base} ${p}`;
+  if (!probeCache.has(key)) probeCache.set(key, narinfo(base, p));
+  return probeCache.get(key);
+};
+const inAttic = p => probe(`${ENDPOINT}/${CACHE}`, p);
+
+// `attic push` walks the closure by default, so every nixpkgs path a pi-pkg output
+// needs (node, bash, glibc) gets uploaded here even though cache.nixos.org already
+// serves it. --no-closure names only the two paths this cache is actually for: the
+// package output and its npmDeps. Everything they reference comes from nixpkgs.
+const ATTIC_PUSH = ['push', '--no-closure', CACHE];
+
+// Only the output decides whether to build. Requiring npmDeps too would rebuild
+// ~4500 already-cached packages just to backfill a path that lands here for free the
+// next time each package is bumped and rebuilt.
+const toBuild = names.filter(k => !inAttic(outPath(k)));
 console.log(`Already cached: ${names.length - toBuild.length}`);
 console.log(`Need building: ${toBuild.length}`);
 
@@ -93,11 +120,19 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
   // Candidates only: a failed build leaves its output directory behind, so a path
   // that exists on disk has not necessarily been produced. pushablePaths asks nix.
   const candidates = batch.filter(k => existsSync(outPath(k) || ''));
-  const pushable = pushablePaths(candidates.map(outPath));
-  const shipped = new Set(candidates.filter(k => pushable.includes(outPath(k))).map(k => k));
+  // Push npmDeps alongside each output. attic walks references, not inputs, so the
+  // fixed-output npm cache has to be named explicitly or it never reaches the cache.
+  // Only name paths this cache does not already serve and no other substituter
+  // provides. Without the second half every batch re-uploads the nixpkgs pieces of
+  // each closure that Attic inherited from cache.nixos.org.
+  const wanted = [];
+  for (const k of candidates) wanted.push(outPath(k), depsPath(k));
+  const pushable = pushablePaths(wanted).filter(p => !inAttic(p));
+  const delivered = p => !p || inAttic(p) || pushable.includes(p);
+  const shipped = new Set(candidates.filter(k => delivered(outPath(k)) && delivered(depsPath(k))).map(k => k));
 
   if (pushable.length) {
-    const all = spawnSync(ATTIC, ['push', CACHE, ...pushable], { timeout: 1_800_000 });
+    const all = spawnSync(ATTIC, [...ATTIC_PUSH, ...pushable], { timeout: 1_800_000 });
     if (all.status === 0) {
       pushed += pushable.length;
     } else {
@@ -105,13 +140,13 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
       // in the log and every package in it looked like a silent failure.
       console.log(`batch push failed (exit ${all.status}): ${(all.stderr || '').toString().slice(0, 500)}`);
       // One bad path fails the whole call, so retry one at a time to keep the rest.
-      shipped.clear();
+      for (const k of candidates) shipped.delete(k);
       for (const p of pushable) {
-        const r = spawnSync(ATTIC, ['push', CACHE, p], { timeout: 300_000 });
-        if (r.status === 0) {
-          pushed++;
-          for (const k of candidates) if (outPath(k) === p) shipped.add(k);
-        }
+        const r = spawnSync(ATTIC, [...ATTIC_PUSH, p], { timeout: 300_000 });
+        if (r.status === 0) pushed++;
+      }
+      for (const k of candidates) {
+        if (inAttic(outPath(k)) && delivered(depsPath(k))) shipped.add(k);
       }
     }
   }
@@ -129,12 +164,12 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
       failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) || `nix build exit ${r.status}` });
       continue;
     }
-    const ok = pushablePaths([outPath(k)]);
+    const ok = pushablePaths([outPath(k), depsPath(k)]).filter(p => !inAttic(p));
     if (!ok.length) {
       failed.push({ name: k, outPath: outPath(k) || null, err: 'nix reports the output path is not valid after a successful build' });
       continue;
     }
-    const p = spawnSync(ATTIC, ['push', CACHE, ok[0]], { timeout: 300_000 });
+    const p = spawnSync(ATTIC, [...ATTIC_PUSH, ...ok], { timeout: 300_000 });
     if (p.status === 0) pushed++;
     else failed.push({ name: k, outPath: outPath(k) || null, err: firstError(p.stderr) || `attic exit ${p.status}` });
   }
