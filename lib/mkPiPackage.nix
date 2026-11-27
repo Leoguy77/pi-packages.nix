@@ -53,7 +53,13 @@ let
     "rm -rf $out/node_modules/${d} 2>/dev/null || true"
     "find $out/node_modules -type d -path '*/node_modules/${d}' -prune -exec rm -rf {} + 2>/dev/null || true"
   ]) hostProvidedDeps)) + ''
+
   # Remove .bin symlinks whose target was stripped, so `noBrokenSymlinks` passes.
+  # The blank line above is load bearing: an indented string eats the newline right
+  # after its opening quotes, so without it this comment gets glued to the previous
+  # line as `|| true#`, and bash reads `true#` as a command name. That killed every
+  # package with no node_modules directory, because the `find` before it fails and
+  # hands over to the `||` branch.
   for b in $out/node_modules/.bin/*; do
     [ -e "$b" ] || rm -f "$b" 2>/dev/null || true
   done
