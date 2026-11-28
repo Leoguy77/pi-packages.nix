@@ -114,7 +114,6 @@ async function getPackageMetadata(name) {
   
   const deps = versionMeta.dependencies || {};
   const piManifest = versionMeta.pi || {};
-  const tier = Object.keys(deps).length === 0 ? 'A' : 'B';
 
   // Nix does not run on Windows, so a `"win32"`-only package can never be consumed
   // here and would fail every build run with EBADPLATFORM. macOS-only packages are
@@ -123,12 +122,13 @@ async function getPackageMetadata(name) {
   // line on ~13k entries.
   if (!supportsPosix(versionMeta.os)) return null;
 
+  // No `tier` field. It only ever said whether `dependencies` was empty, and every
+  // reader now derives that directly, so a stored copy could only go stale.
   const entry = {
     name: versionMeta.name,
     version: latestVersion,
     tarball: versionMeta.dist.tarball,
     hash: versionMeta.dist.integrity,
-    tier,
     piManifest,
     dependencies: deps,
     peerDependencies: versionMeta.peerDependencies || {},
@@ -146,15 +146,15 @@ const NPM_CACHE = join(TMP, 'shared-cache');
 // Resolve npm once, absolutely. spawn() without a shell inherits PATH, so launching
 // this script under a bare `node` (no npm on PATH) made every one of ~900 lockfile
 // generations fail with `spawn npm ENOENT` -- and a failed generation leaves the
-// package Tier B with no lockfile and no npmDepsHash, silently uncached forever.
+// package with no lockfile, so it can only build with network access.
 // Prefer the npm next to the running node binary.
 // process.execPath resolves symlinks, so it cannot be used to find npm next to the
 // node that was invoked (NixOS nodejs' bin/node is a symlink into nodejs-slim, which
 // has no npm). PATH lookup is the only reliable resolution; validate it up front.
 const NPM = process.env.NPM_BIN || 'npm';
 // Refuse to start a sweep without npm. The failure otherwise surfaces once per
-// package as a logged "Lockfile failed" and leaves Tier B packages with no lockfile
-// and no hash -- buildable, never cacheable, and easy to miss entirely (840 of them
+// package as a logged "Lockfile failed" and leaves packages with no lockfile --
+// buildable, but only with network access, and easy to miss entirely (840 of them
 // went unnoticed). nodejs-slim ships without npm, which is the usual trap.
 if (spawnSync(NPM, ['--version']).status !== 0 && !REGISTRY_ONLY) {
   process.stderr.write(
@@ -681,19 +681,16 @@ async function processPackage(obj, packages) {
 
     const prev = packages[key];
     const bumped = prev && prev.version !== meta.version;
-    
-    // Carry over the previous npmDepsHash only if the version did not move; a bumped
-    // version has a different dependency tree, so the hash is invalid and must be
-    // recomputed by the workflow's "Compute npmDepsHash" step.
+
+    // A bumped version has a different dependency tree, so its lockfile is stale.
     if (bumped) {
-      meta.npmDepsHash = null;
       try { execSync(`rm -f '${join(PACKAGES_DIR, key, 'package-lock.json')}'`, { timeout: 5000 }); } catch {}
       process.stderr.write(`  bumped ${pkgName} ${prev.version} -> ${meta.version}\n`);
     }
     
     packages[key] = meta;
     
-    if (!REGISTRY_ONLY && meta.tier === 'B') {
+    if (!REGISTRY_ONLY && Object.keys(meta.dependencies || {}).length > 0) {
       await generateLockfile(pkgName, meta.tarball, key, meta.version);
     }
   } catch (err) {
@@ -764,15 +761,17 @@ async function main() {
   }
 
   if (LOCKS_ONLY) {
-    const tierB = Object.entries(packages)
-      .filter(([k, e]) => e.tier === 'B' && (!ONLY.length || ONLY.includes(k)));
-    process.stderr.write(`Generating lockfiles for ${tierB.length} Tier B packages...\n`);
+    // Packages with dependencies are the ones that can have a lockfile. `tier` used to
+    // record this; it is one field of the entry, so read the entry.
+    const withDeps = Object.entries(packages)
+      .filter(([k, e]) => Object.keys(e.dependencies || {}).length > 0 && (!ONLY.length || ONLY.includes(k)));
+    process.stderr.write(`Generating lockfiles for ${withDeps.length} packages with dependencies...\n`);
     let done = 0;
-    for (let i = 0; i < tierB.length; i += CONCURRENCY) {
-      const batch = tierB.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < withDeps.length; i += CONCURRENCY) {
+      const batch = withDeps.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async ([key, entry]) => {
         done++;
-        process.stderr.write(`[${done}/${tierB.length}] ${entry.name}\n`);
+        process.stderr.write(`[${done}/${withDeps.length}] ${entry.name}\n`);
         await generateLockfile(entry.name, entry.tarball, key, entry.version);
       }));
     }
@@ -806,7 +805,7 @@ async function main() {
         // generateLockfile is async -- it MUST be awaited, otherwise this returns
         // immediately and the process exits while npm is still resolving.
         const entry = packages[key];
-        if (entry && entry.tier === 'B' && !existsSync(join(PACKAGES_DIR, key, 'package-lock.json'))) {
+        if (entry && Object.keys(entry.dependencies || {}).length > 0 && !existsSync(join(PACKAGES_DIR, key, 'package-lock.json'))) {
           process.stderr.write(`[${fetched}/${objects.length}] ${name} (lockfile)\n`);
           await generateLockfile(name, entry.tarball, key, entry.version);
         }
@@ -850,8 +849,9 @@ async function main() {
   if (existsSync(STATE_PATH)) execSync(`rm ${STATE_PATH}`);
   
   console.error(`\nRegistry: ${Object.keys(packages).length} packages`);
-  console.error(`Tier A: ${Object.values(packages).filter(p => p.tier === 'A').length}`);
-  console.error(`Tier B: ${Object.values(packages).filter(p => p.tier === 'B').length}`);
+  const vals = Object.values(packages);
+  const noDeps = vals.filter(p => Object.keys(p.dependencies || {}).length === 0).length;
+  console.error(`  ${noDeps} with no dependencies, ${vals.length - noDeps} with dependencies`);
   
   // Output the registry JSON to stdout for piping
   console.log(JSON.stringify({ packages }));

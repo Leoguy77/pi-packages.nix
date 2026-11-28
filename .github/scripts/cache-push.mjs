@@ -1,4 +1,4 @@
-// Build every Tier B/C package that Attic is missing, push what builds, and
+// Build every package that Attic is missing, push what builds, and
 // leave a worklist for the ones that do not.
 //
 // This lives in a file rather than inline in the workflow because it was inline
@@ -26,27 +26,25 @@ const firstError = b => (b || '').toString().split('\n')
   .slice(0, 400);
 
 const reg = JSON.parse(readFileSync('registry/registry.json', 'utf8'));
-const names = Object.entries(reg.packages)
-  .filter(([, v]) => (v.tier === 'B' || v.tier === 'C') && v.npmDepsHash?.startsWith('sha256-'))
-  .map(([k]) => k);
+// No dependency filtering here. The registry used to carry a `tier` and this only
+// took B/C, which silently dropped the no-dependency packages — they are cheap to
+// build and worth caching, and the split no longer exists to filter on.
+const names = Object.keys(reg.packages);
 console.log(`Packages: ${names.length}`);
 
-// One eval for every outPath, plus its npmDeps path. The build output path is
-// decided here, so the per-package `nix build --print-out-paths` calls are not
-// needed later.
+// One eval for every outPath. The build output path is decided here, so the
+// per-package `nix build --print-out-paths` calls are not needed later.
 //
-// npmDeps is why this is not just outPath: it is a fixed-output derivation that
-// npm reads as an *input*, so `attic push <output>` never uploads it -- the closure
-// contains references, not inputs. The result was that every npmDeps narinfo
-// returned 404 while the output returned 200, so each cache hit on a package still
-// ran a full `npm install` (207 npm runs in run 45811788056 for 449 packages).
+// This used to also eval each package's `npmDeps`, the fixed-output npm cache,
+// because attic walks references and never uploaded it. That derivation is gone:
+// dependencies are now ordinary fetchurl paths that the closure does contain, so
+// pushing the output is enough.
 const evaluated = spawnSync('nix', ['eval', '--json', '--apply',
-  'x: builtins.mapAttrs (n: v: { out = v.outPath; deps = if v ? npmDeps then v.npmDeps.outPath else null; }) x',
+  'x: builtins.mapAttrs (n: v: v.outPath) x',
   '.#packages.x86_64-linux'],
   { timeout: 300_000, maxBuffer: 16 * 1024 * 1024 });
 const allOut = JSON.parse(evaluated.stdout.toString());
-const outPath = k => allOut['pi-' + safe(k)]?.out;
-const depsPath = k => allOut['pi-' + safe(k)]?.deps;
+const outPath = k => allOut['pi-' + safe(k)];
 
 // Skip what Attic already has. This is also what makes a killed run resumable:
 // the next run pays ~15 minutes of probing and then starts where the last died.
@@ -68,13 +66,10 @@ const inAttic = p => probe(`${ENDPOINT}/${CACHE}`, p);
 
 // `attic push` walks the closure by default, so every nixpkgs path a pi-pkg output
 // needs (node, bash, glibc) gets uploaded here even though cache.nixos.org already
-// serves it. --no-closure names only the two paths this cache is actually for: the
-// package output and its npmDeps. Everything they reference comes from nixpkgs.
+// serves it. --no-closure names only the paths this cache is actually for. The npm
+// dependencies are in the closure as ordinary store paths, so they are still covered.
 const ATTIC_PUSH = ['push', '--no-closure', CACHE];
 
-// Only the output decides whether to build. Requiring npmDeps too would rebuild
-// ~4500 already-cached packages just to backfill a path that lands here for free the
-// next time each package is bumped and rebuilt.
 const toBuild = names.filter(k => !inAttic(outPath(k)));
 console.log(`Already cached: ${names.length - toBuild.length}`);
 console.log(`Need building: ${toBuild.length}`);
@@ -120,16 +115,13 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
   // Candidates only: a failed build leaves its output directory behind, so a path
   // that exists on disk has not necessarily been produced. pushablePaths asks nix.
   const candidates = batch.filter(k => existsSync(outPath(k) || ''));
-  // Push npmDeps alongside each output. attic walks references, not inputs, so the
-  // fixed-output npm cache has to be named explicitly or it never reaches the cache.
-  // Only name paths this cache does not already serve and no other substituter
-  // provides. Without the second half every batch re-uploads the nixpkgs pieces of
-  // each closure that Attic inherited from cache.nixos.org.
+  // Only name paths this cache does not already serve. Otherwise every batch
+  // re-uploads the nixpkgs pieces of each closure that Attic inherited from
+  // cache.nixos.org.
   const wanted = [];
-  for (const k of candidates) wanted.push(outPath(k), depsPath(k));
+  for (const k of candidates) wanted.push(outPath(k));
   const pushable = pushablePaths(wanted).filter(p => !inAttic(p));
-  const delivered = p => !p || inAttic(p) || pushable.includes(p);
-  const shipped = new Set(candidates.filter(k => delivered(outPath(k)) && delivered(depsPath(k))).map(k => k));
+  const shipped = new Set(candidates.filter(k => !outPath(k) || inAttic(outPath(k)) || pushable.includes(outPath(k))));
 
   if (pushable.length) {
     const all = spawnSync(ATTIC, [...ATTIC_PUSH, ...pushable], { timeout: 1_800_000 });
@@ -146,7 +138,7 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
         if (r.status === 0) pushed++;
       }
       for (const k of candidates) {
-        if (inAttic(outPath(k)) && delivered(depsPath(k))) shipped.add(k);
+        if (inAttic(outPath(k))) shipped.add(k);
       }
     }
   }
@@ -164,7 +156,7 @@ for (let i = 0; i < toBuild.length; i += BATCH) {
       failed.push({ name: k, outPath: outPath(k) || null, err: firstError(r.stderr) || `nix build exit ${r.status}` });
       continue;
     }
-    const ok = pushablePaths([outPath(k), depsPath(k)]).filter(p => !inAttic(p));
+    const ok = pushablePaths([outPath(k)]).filter(p => !inAttic(p));
     if (!ok.length) {
       failed.push({ name: k, outPath: outPath(k) || null, err: 'nix reports the output path is not valid after a successful build' });
       continue;

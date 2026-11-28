@@ -1,13 +1,13 @@
 # mkPiPackage.nix - Build a pi package from registry entry
 #
-# Tiers:
-#   A - No npm dependencies → unpack tarball (instant)
-#   B - Has dependencies → one fetchurl per dependency, laid out by hand
+# Two shapes, chosen by whether the package declared dependencies:
+#   none     → unpack the tarball (instant)
+#   some     → one fetchurl per lockfile entry, laid out by assemble-node-modules.cjs
 #
 # The registry generator (generate.mjs) pre-generates lockfiles and stores
 # them at packages/<name>/package-lock.json relative to the flake root.
 #
-# Tier B used to run `buildNpmPackage`. Dropped for these reasons:
+# Packages with dependencies used to run `buildNpmPackage`. Dropped for these reasons:
 #   - It pinned a fixed-output `npmDeps` cache, so the package was unbuildable
 #     anywhere that cache was missing (which is every user without the Attic
 #     substitution, and every CI runner on a cold cache: ENOTCACHED).
@@ -26,11 +26,11 @@
 # `name` = registry entry's npm name (used for the output pname).
 # `key`  = the sanitized registry KEY, which is also the directory name under
 #          packages/ where the generated package-lock.json lives.
-{ name, key, tarball, hash, tier, packagesDir
-, version ? "0.0.0", dependencies ? {}, npmDepsHash ? null, ... }:
+{ name, key, tarball, hash, packagesDir
+, version ? "0.0.0", dependencies ? {}, ... }:
 
 let
-  tierA = tier == "A" || dependencies == {};
+  noDeps = dependencies == {};
 
   tarballSrc = pkgs.fetchurl {
     url = tarball;
@@ -79,7 +79,7 @@ let
   done
 '';
 
-in if tierA then
+in if noDeps then
   
   pkgs.runCommand "pi-pkg-${name}" { nativeBuildInputs = [ pkgs.gnutar ]; } ''
     mkdir -p $out

@@ -48,14 +48,19 @@
       buildPackages = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
           (nixpkgs.lib.filterAttrs (_: fitsSystem pkgs.stdenv.hostPlatform.system) registry.packages);
-        
-      buildTierA = pkgs:
+
+      # Split for `packages.<system>.tierA` / `.tierB` convenience attrs. The registry
+      # no longer stores a tier: it only ever said whether `dependencies` was empty,
+      # so it is read from there and cannot go stale.
+      hasDeps = e: (e.dependencies or {}) != {};
+
+      buildNoDeps = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
-          (nixpkgs.lib.filterAttrs (_: e: e.tier == "A" && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
-      
-      buildTierB = pkgs:
+          (nixpkgs.lib.filterAttrs (_: e: !hasDeps e && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
+
+      buildWithDeps = pkgs:
         nixpkgs.lib.mapAttrs' (name: buildOne pkgs name)
-          (nixpkgs.lib.filterAttrs (_: e: e.tier == "B" && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
+          (nixpkgs.lib.filterAttrs (_: e: hasDeps e && fitsSystem pkgs.stdenv.hostPlatform.system e) registry.packages);
         
     in {
       lib = {
@@ -70,12 +75,12 @@
             paths = builtins.attrValues (buildPackages pkgs);
           };
           tierA = pkgs.symlinkJoin {
-            name = "pi-packages-tierA";
-            paths = builtins.attrValues (buildTierA pkgs);
+            name = "pi-packages-no-deps";
+            paths = builtins.attrValues (buildNoDeps pkgs);
           };
           tierB = pkgs.symlinkJoin {
-            name = "pi-packages-tierB";
-            paths = builtins.attrValues (buildTierB pkgs);
+            name = "pi-packages-with-deps";
+            paths = builtins.attrValues (buildWithDeps pkgs);
           };
         }
       );
