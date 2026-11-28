@@ -2,10 +2,24 @@
 #
 # Tiers:
 #   A - No npm dependencies → unpack tarball (instant)
-#   B - Has dependencies → buildNpmPackage with pre-generated lockfile
+#   B - Has dependencies → one fetchurl per dependency, laid out by hand
 #
 # The registry generator (generate.mjs) pre-generates lockfiles and stores
 # them at packages/<name>/package-lock.json relative to the flake root.
+#
+# Tier B used to run `buildNpmPackage`. Dropped for these reasons:
+#   - It pinned a fixed-output `npmDeps` cache, so the package was unbuildable
+#     anywhere that cache was missing (which is every user without the Attic
+#     substitution, and every CI runner on a cold cache: ENOTCACHED).
+#   - It required npmDepsHash to match, so any manifest edit needed a rehash.
+#   - It ran npm, which then had to be lied to about devDependencies,
+#     workspaces, devEngines and overrides, because npm compares the lockfile
+#     against the tarball's package.json and refuses on any disagreement.
+# None of that is needed. Every lockfile entry already carries `integrity` (the
+# tarball's own sha512) and `resolved` (its URL), so each dependency becomes an
+# ordinary content-addressed store path. `nix build` then works with no cache,
+# no npm and no hash step, and two packages needing the same name@version share
+# one store path.
 
 { pkgs, lib }:
 
@@ -78,133 +92,89 @@ else
     lockPath = packagesDir + "/${key}/package-lock.json";
     hasLock = builtins.pathExists lockPath;
     
-    # Merge lockfile into src to avoid store path refs in npmDeps sub-derivation
-    src = if hasLock then pkgs.runCommand "src-${name}" {
-      nativeBuildInputs = [ pkgs.gnutar pkgs.nodejs ];
+    
+  # Has lockfile → unpack the tarball, then place one store path per dependency.
+  # No lockfile → stdenv.mkDerivation with inline npm install (uncached)
+  in if hasLock then
+    let
+      lock = builtins.fromJSON (builtins.readFile lockPath);
+      entries = lock.packages or { };
+
+      # Last path segment of a lockfile key, e.g. "node_modules/@scope/pkg" ->
+      # "@scope/pkg". Used to recognise host-provided packages, which pi supplies
+      # from its own tree and which must therefore not be fetched or shipped.
+      pkgNameOf = k:
+        # Nix's regex engine has no non-capturing groups, so the scope is a plain
+        # group and the full name is match group 1.
+        let m = builtins.match ".*node_modules/((@[^/]+/)?[^/]+)" k;
+        in if m == null then k else builtins.head m;
+
+      # Which lockfile entries become their own store path. Skipped on purpose:
+      #   ""         the package itself, already unpacked from the tarball
+      #   inBundle   files shipped inside a parent's tarball, with no integrity of
+      #              their own; unpacking the parent brings them along
+      #   link       workspace symlink pointing at a sibling inside the tree
+      #   no http    vendored file:/link: tarballs, which the generator pins to "*"
+      depKeys = lib.filter (k:
+        k != ""
+        && !(entries.${k}.inBundle or false)
+        && !(entries.${k}.link or false)
+        && (entries.${k}.integrity or null) != null
+        && (entries.${k}.resolved or null) != null
+        && builtins.match "https?://.*" entries.${k}.resolved != null
+        && !(builtins.elem (pkgNameOf k) hostProvidedDeps)
+      ) (builtins.attrNames entries);
+
+      # "sha512-<base64>" -> the attribute fetchurl expects.
+      splitHash = i:
+        let m = builtins.match "(sha[0-9]+)-(.+)" i;
+        in if m == null then null else { algo = builtins.head m; b64 = builtins.elemAt m 1; };
+
+      # One derivation per dependency, named by lockfile path and version so two
+      # packages needing the same name@version share it, and a package needing a
+      # different version gets a different one.
+      mkDep = k:
+        let
+          e = entries.${k};
+          h = splitHash e.integrity;
+          safe = builtins.replaceStrings [ "/" "@" "." ] [ "-" "-" "-" ] k;
+        in pkgs.runCommand "npm-${safe}-${e.version}" {
+          src = pkgs.fetchurl ({ url = e.resolved; } // { ${h.algo} = h.b64; });
+          nativeBuildInputs = [ pkgs.gnutar pkgs.gzip ];
+        } ''
+          mkdir -p $out
+          # --delay-directory-restore applies each directory's mode only after its
+          # contents are written. Without it a tarball whose directories are stored
+          # mode 0666 (pngjs@5.0.0 does this) cannot be traversed while extracting,
+          # so every file under them fails with EACCES.
+          tar -xzf $src --strip-components=1 -C $out --delay-directory-restore
+          # Store files are read-only by design, but a package's build step may need to
+          # write next to its own sources.
+          chmod -R u+rwX $out
+        '';
+
+      # Lockfile key -> store path, handed to the assembler as JSON so the layout
+      # matches the lockfile exactly (node_modules/a/node_modules/b and so on).
+      depMap = pkgs.writeText "deps-${name}.json" (builtins.toJSON
+        (builtins.listToAttrs (map (k: { name = k; value = "${mkDep k}"; }) depKeys)));
+    in
+    pkgs.runCommand "pi-pkg-${name}" {
+      nativeBuildInputs = [ pkgs.gnutar pkgs.gzip pkgs.nodejs ];
     } ''
       mkdir -p $out
       tar -xzf ${tarballSrc} --strip-components=1 -C $out
-      cp ${lockPath} $out/package-lock.json
-      # npm ci fails offline when package.json declares anything the lockfile does not
-      # contain. registry/generate.mjs strips these before generating the lockfile, but the
-      # tarball's package.json still carries them at build time, so mirror every strip here:
-      #   devDependencies    -> ENOTCACHED when they name the host @earendil-works/* packages
-      #   devEngines         -> EBADDEVENGINES (npm refuses before installing anything)
-      #   workspaces         -> EUSAGE, "Missing: <member> from lock file"
-      #   workspace:* deps   -> EUNSUPPORTEDPROTOCOL, "Unsupported URL Type workspace:"
-      # Additionally: host packages are removed from peerDependencies outright (marking them
-      # optional is not enough once `npm ci` is asked to omit peers -- it still demanded
-      # them), any declaration the lockfile has no version for is dropped (a package
-      # aliasing to `npm:null@...` resolves to nothing), and host entries in `overrides`
-      # are dropped because npm reports EOVERRIDE when an override pins a version the
-      # declared range does not match.
-      ${pkgs.nodejs}/bin/node --input-type=commonjs -e '
-        const fs = require("fs");
-        const host = ${builtins.toJSON hostProvidedDeps};
-        const p = process.argv[1];
-        const j = JSON.parse(fs.readFileSync(p));
-        const lockPath = p.replace(/package\.json$/, "package-lock.json");
-        const lock = fs.existsSync(lockPath) ? JSON.parse(fs.readFileSync(lockPath, "utf8")) : { packages: {} };
-        delete j.devDependencies;
-        delete j.devEngines;
-        delete j.workspaces;
-        // The registry generator rewrites a local path spec to "*" when the path is
-        // outside the tarball, so the lockfile records the published package. npm ci
-        // compares that lockfile against this manifest and refuses to run when the two
-        // disagree ("Missing: @luan.sh/pi-libactions@ from lock file"), so the same
-        // rewrite has to happen here. A vendored path (inside the tarball) keeps its
-        // spec, matching what the generator did for it.
-        for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
-          if (!j[field]) continue;
-          for (const [n, v] of Object.entries(j[field])) {
-            if (typeof v !== "string" || !/^(file|link):|^\.\.?\//.test(v)) continue;
-            // A vendored tarball is recorded with a file: resolved URL that
-            // prefetch-npm-deps rejects, so the generator rewrites it to "*" too.
-            const e = lock.packages && lock.packages["node_modules/" + n];
-            if (e && e.version && (!e.resolved || !/^file:.*\.t(ar\.)?gz$/i.test(e.resolved))) j[field][n] = "*";
-          }
-        }
-        for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
-          if (!j[field]) continue;
-          for (const [n, v] of Object.entries(j[field])) {
-            if (typeof v === "string" && v.startsWith("workspace:")) { delete j[field][n]; continue; }
-            if (host.includes(n)) { delete j[field][n]; continue; }
-            const e = lock.packages && lock.packages["node_modules/" + n];
-            if (!e || !e.version) delete j[field][n];
-          }
-          if (Object.keys(j[field]).length === 0) delete j[field];
-        }
-        if (j.overrides) {
-          // Override keys may carry a version suffix, e.g.
-          // "@earendil-works/pi-coding-agent@1.4.0", which an exact-name match misses.
-          for (const k of Object.keys(j.overrides)) {
-            if (host.some(d => k === d || k.startsWith(d + "@"))) delete j.overrides[k];
-          }
-          // npm requires an override to equal the declared spec exactly, not merely to be
-          // compatible: override "1.2.0" against a declared "~1.2.0" is EOVERRIDE, not a
-          // no-op. This applies to peerDependencies too (pi-switch-pi-codex-app-server
-          // declares chord as ~1.2.0 in peers and 1.2.0 in overrides). Drop the override
-          // and let the declaration win.
-          const declared = {
-            ...(j.dependencies || {}), ...(j.devDependencies || {}),
-            ...(j.optionalDependencies || {}), ...(j.peerDependencies || {}),
-          };
-          for (const k of Object.keys(j.overrides)) {
-            const base = k.replace(/@[^@/]+$/, "");
-            const want = j.overrides[k];
-            if (declared[base] && typeof want === "string" && want !== declared[base]) delete j.overrides[k];
-          }
-          if (Object.keys(j.overrides).length === 0) delete j.overrides;
-        }
-        j.peerDependenciesMeta = j.peerDependenciesMeta || {};
-        for (const d of host) {
-          if (j.peerDependencies && j.peerDependencies[d]) {
-            j.peerDependenciesMeta[d] = { ...(j.peerDependenciesMeta[d] || {}), optional: true };
-          }
-        }
-        fs.writeFileSync(p, JSON.stringify(j, null, 2));
-      ' $out/package.json
-    '' else tarballSrc;
-    
-  # Has valid lockfile → buildNpmPackage (cached via npmDepsHash)
-  # No lockfile → stdenv.mkDerivation with inline npm install (uncached)
-  in if hasLock then pkgs.buildNpmPackage {
-    pname = "pi-pkg-${name}";
-    inherit version src;
-    
-    npmDepsHash = if npmDepsHash != null then npmDepsHash
-      else "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-    
-    dontNpmBuild = true;
-    # Suppress scripts globally (npm rebuild in configurePhase) and skip optional
-    # platform-specific deps (e.g., @biomejs/cli-win32-arm64 on x86_64-linux).
-    # --omit=peer: host-provided peers (@earendil-works/*, typebox) are not in the
-    # offline npm cache and are stripped from $out afterwards anyway, so npm ci must
-    # not try to resolve them (ENOTCACHED otherwise).
-    npmFlags = [ "--ignore-scripts" "--omit=optional" "--omit=peer" "--no-audit" "--no-fund" ];
-    npmInstallFlags = [ "--legacy-peer-deps" ];
-    makeCacheWritable = true;
-    # Some packages depend on a git dependency (baileys, register-scheme) that ships
-    # install scripts without its own lockfile. prefetch-npm-deps refuses those by
-    # default. The scripts never run here -- npmFlags carries --ignore-scripts -- so
-    # allowing the fetch only affects what gets cached, not what gets executed.
-    forceGitDeps = true;
-    # npm install runs during configurePhase; unset SSL_CERT_FILE first
-    preConfigure = ''
-      unset SSL_CERT_FILE NIX_SSL_CERT_FILE
-    '';
-    # Also set at derivation level for child processes
-    NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    installPhase = ''
-      mkdir -p $out
-      cp -r . $out/
-      rm -rf $out/node_modules/.cache 2>/dev/null || true
+      # Nothing is deleted first: some tarballs ship a node_modules of their own,
+      # including packages the lockfile never declares (measured: 56 of 4,598
+      # packages bundle, and pi-copy-mode depends on 5 such undeclared modules).
+      # The assembler copies over them, and the lockfile's version wins, which is
+      # what npm does.
+      ${pkgs.nodejs}/bin/node ${./assemble-node-modules.cjs} "$out" "$(cat ${depMap})"
       # Move host-provided deps to peerDependencies + strip their copies so pi
       # resolves its own (no duplicate-module warnings).
       ${fixPkgJson}
       ${stripScript}
-    '';
-  } else pkgs.stdenv.mkDerivation {
+    ''
+  else pkgs.stdenv.mkDerivation {
     pname = "pi-pkg-${name}";
     inherit version;
     src = tarballSrc;

@@ -3,7 +3,7 @@
 // Also generates package-lock.json for Tier B packages
 
 import { execSync, spawn, spawnSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
 
@@ -179,7 +179,18 @@ async function runNpmLock(workDir) {
       '--loglevel=error', `--cache=${NPM_CACHE}`
     ], { cwd: join(workDir, 'pkg'), env: { ...process.env, HOME: workDir }, stdio: 'pipe' });
     const t1 = setTimeout(() => { c1.kill(); reject(new Error('timeout-step1')); }, 120000);
-    c1.on('exit', (c) => { clearTimeout(t1); c === 0 ? resolve() : reject(new Error(`npm exit code ${c}`)); });
+    // Keep npm's own words. Rejecting with bare "exit code 1" is why 72 packages sat
+    // lockfile-less: the reason (EUNSUPPORTEDPROTOCOL, ERESOLVE, an unpublished member)
+    // was in the pipe and thrown away, so every one of them looked like the same
+    // unexplained failure.
+    let err1 = '';
+    c1.stderr.on('data', (d) => { err1 += d; if (err1.length > 8000) err1 = err1.slice(-8000); });
+    c1.on('exit', (c) => {
+      clearTimeout(t1);
+      if (c === 0) return resolve();
+      const m = err1.match(/npm error ([^\n]+)/g);
+      reject(new Error(`npm exit code ${c}${m ? ': ' + m.slice(0, 3).map(s => s.replace(/^npm error /, '')).join(' | ') : ''}`));
+    });
     c1.on('error', reject);
   });
   
@@ -198,12 +209,16 @@ async function runNpmLock(workDir) {
       '--loglevel=error', `--cache=${NPM_CACHE}`
     ], { cwd: join(workDir, 'pkg'), env: { ...process.env, HOME: workDir }, stdio: 'pipe' });
     const t2 = setTimeout(() => { c2.kill(); reject(new Error('timeout-step2')); }, 180000);
+    let err2 = '';
+    c2.stderr.on('data', (d) => { err2 += d; if (err2.length > 8000) err2 = err2.slice(-8000); });
     c2.on('exit', (c) => {
       clearTimeout(t2);
       if (c === 0) {
         try { execSync('rm -rf node_modules', { cwd: join(workDir, 'pkg'), timeout: 10000 }); } catch {}
-        resolve();
-      } else reject(new Error(`npm exit code ${c} (step2)`));
+        return resolve();
+      }
+      const m = err2.match(/npm error ([^\n]+)/g);
+      reject(new Error(`npm exit code ${c} (step2)${m ? ': ' + m.slice(0, 3).map(s => s.replace(/^npm error /, '')).join(' | ') : ''}`));
     });
     c2.on('error', reject);
   });
@@ -284,6 +299,42 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
     // --offline fails with ENOTCACHED. Removing the tree makes npm resolve them from the
     // registry like any other dependency, which is what the offline cache needs.
     execSync(`rm -rf ${workDir}/pkg/node_modules`, { stdio: 'pipe', timeout: 10000 });
+    // A tarball can be a workspace root, with member manifests under packages/*. npm
+    // reads every member's package.json, so a `workspace:*` dependency declared by a
+    // member fails the whole install with EUNSUPPORTEDPROTOCOL even after the root's
+    // own workspaces field is gone. Rewrite each member the same way the root is
+    // rewritten below: a workspace: spec becomes "*" so npm takes the published copy.
+    // Seen in pi-harness-runtime@1.1.531, where packages/relay declares
+    // "@pi-harness/contracts": "workspace:*".
+    for (const dir of ['packages', 'apps', 'modules', 'workspaces']) {
+      const root = join(workDir, 'pkg', dir);
+      if (!existsSync(root)) continue;
+      const walk = (d, depth) => {
+        if (depth > 2) return;
+        let ents;
+        try { ents = readdirSync(d, { withFileTypes: true }); } catch { return; }
+        for (const ent of ents) {
+          if (!ent.isDirectory() || ent.name === 'node_modules' || ent.name.startsWith('.')) continue;
+          const sub = join(d, ent.name);
+          const mf = join(sub, 'package.json');
+          if (existsSync(mf)) {
+            try {
+              const sj = JSON.parse(readFileSync(mf, 'utf8'));
+              let changed = false;
+              for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+                if (!sj[field]) continue;
+                for (const [n, v] of Object.entries(sj[field])) {
+                  if (typeof v === 'string' && v.startsWith('workspace:')) { sj[field][n] = '*'; changed = true; }
+                }
+              }
+              if (changed) writeFileSync(mf, JSON.stringify(sj, null, 2) + '\n');
+            } catch {}
+          }
+          walk(sub, depth + 1);
+        }
+      };
+      walk(root, 0);
+    }
     // Strip workspace:* deps — unresolvable by standalone npm
     const pjPath = join(workDir, 'pkg', 'package.json');
     if (existsSync(pjPath)) {
@@ -341,6 +392,13 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
       // Strip devEngines — npm's --engine-strict=false doesn't handle pnpm packageManager
       if (pj.devEngines) {
         delete pj.devEngines;
+      }
+      // Drop the workspaces field. It names member directories that npm will treat as
+      // parts of one install, and a member whose deps cannot resolve offline (or that
+      // declares workspace:* itself) fails the whole generation. The published package
+      // is a single unit, so the members are rewritten above and the field goes.
+      if (pj.workspaces) {
+        delete pj.workspaces;
       }
       // Remove devDependencies — not needed for production lockfiles, often cause E404 for private packages
       if (pj.devDependencies) {
@@ -667,10 +725,20 @@ async function main() {
           continue;
         }
         if (meta.version === entry.version) {
-          process.stderr.write(`  ${key}: already at ${entry.version}\n`);
-          continue;
+          // Same version is not the same as done. A package whose lockfile generation
+          // failed earlier in its life is still Tier B with no lockfile, and skipping it
+          // here means it is never retried: it stays buildable only with the network
+          // and never cacheable. Regenerate when the lockfile is missing or stale.
+          const lp = join(PACKAGES_DIR, key, 'package-lock.json');
+          const haveLock = existsSync(lp) && lockfileVersion(lp) === entry.version;
+          if (haveLock) {
+            process.stderr.write(`  ${key}: already at ${entry.version}\n`);
+            continue;
+          }
+          process.stderr.write(`  ${key}: at ${entry.version} but ${existsSync(lp) ? 'lockfile is stale' : 'no lockfile'} — regenerating\n`);
+        } else {
+          process.stderr.write(`  ${key}: ${entry.version} -> ${meta.version}\n`);
         }
-        process.stderr.write(`  ${key}: ${entry.version} -> ${meta.version}\n`);
         // A bump invalidates both the lockfile and the hash: the dependency tree
         // may have moved even when the direct dependency set looks identical, and
         // only regenerating both makes the fixed-output check pass. processPackage
