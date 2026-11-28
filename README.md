@@ -4,7 +4,7 @@ Nix-native [pi.dev](https://pi.dev/packages) packages — sourced from npm tarba
 
 ## What is this?
 
-This flake provides **13,882 pi native packages** (from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package)) as pure Nix derivations:
+This flake provides **13,929 pi native packages** (from the [npm `pi-package` keyword catalog](https://www.npmjs.com/search?q=keywords:pi-package)) as pure Nix derivations:
 
 | Feature | Description |
 | --------- | ------------- |
@@ -86,15 +86,15 @@ Without the cache, Tier B packages build from source (deterministic, but takes a
 
 ## Available Packages
 
-**13,882 packages** — see [`registry/registry.json`](./registry/registry.json) for the full list.
+**13,929 packages** — see [`registry/registry.json`](./registry/registry.json) for the full list.
 
 ### Tiers
 
 | Tier | Count | Description |
 | ------ | ------- | ------------- |
-| **Tier A** | 9,275 | No npm dependencies (peerDeps only) → instant `fetchurl` + `tar` unpack |
-| **Tier B with lockfile** | 4,534 | Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached) |
-| **Tier B fallback** | 73 | Has dependencies but no valid lockfile (broken npm dep trees, private packages, git deps) → inline `npm install` (needs `--option sandbox false`) |
+| **Tier A** | 9,310 | No npm dependencies (peerDeps only) → instant `fetchurl` + `tar` unpack |
+| **Tier B with lockfile** | 4,544 | Has dependencies, builds via `buildNpmPackage` with pre-generated lockfile (cached) |
+| **Tier B fallback** | 75 | Has dependencies but no valid lockfile (broken npm dep trees, private packages, git deps) → inline `npm install` (needs `--option sandbox false`) |
 
 ### Registry structure
 
@@ -284,14 +284,14 @@ Key optimizations:
 
 | Metric | Count |
 | -------- | ------- |
-| Total packages | 13,882 |
-| Tier A (zero deps, direct unpack) | 9,275 |
-| Tier B (has npm deps) | 4,607 |
-| With lockfile (`buildNpmPackage`, cached) | 4,534 |
-| Fallback (`stdenv.mkDerivation`, needs network) | 73 |
-| Tier B with `npmDepsHash` computed | 4,516 |
+| Total packages | 13,929 |
+| Tier A (zero deps, direct unpack) | 9,310 |
+| Tier B (has npm deps) | 4,619 |
+| With lockfile (`buildNpmPackage`, cached) | 4,544 |
+| Fallback (`stdenv.mkDerivation`, needs network) | 75 |
+| Tier B with `npmDepsHash` computed | 4,526 |
 
-The 73 fallback packages have genuinely unresolvable npm dep trees (private scoped packages, git dependencies, yanked packages on npm).
+The 75 fallback packages have genuinely unresolvable npm dep trees (private scoped packages, git dependencies, yanked packages on npm).
 
 ---
 
