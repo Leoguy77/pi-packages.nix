@@ -96,8 +96,8 @@ jobs:
             echo "REPO_ADMIN_TOKEN not set; leaving the description alone"
             exit 0
           fi
-          total=$(node -e 'console.log(Object.keys(JSON.parse(require("fs").readFileSync("registry/registry.json","utf8")).packages).length)')
-          desc="Nix-native pi.dev packages — ${total} pi extensions, skills, and themes as Nix derivations with an Attic binary cache"
+          total=$(node -e 'console.log(Object.keys(JSON.parse(require("fs").readFileSync("registry/registry.json","utf8")).packages).length.toLocaleString("en-US"))')
+          desc="Every pi.dev package on npm (${total}) as Nix derivations — no npm at build time, no binary cache needed"
           current=$(gh api repos/${{ github.repository }} --jq .description)
           [ "$current" = "$desc" ] && { echo "description up to date"; exit 0; }
           gh repo edit --description "$desc" && echo "description updated to: $desc"
