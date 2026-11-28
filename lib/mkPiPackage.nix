@@ -9,8 +9,8 @@
 #
 # Packages with dependencies used to run `buildNpmPackage`. Dropped for these reasons:
 #   - It pinned a fixed-output `npmDeps` cache, so the package was unbuildable
-#     anywhere that cache was missing (which is every user without the Attic
-#     substitution, and every CI runner on a cold cache: ENOTCACHED).
+#     anywhere that cache was missing (every user without a substituter, and every
+#     CI runner on a cold cache: ENOTCACHED).
 #   - It required npmDepsHash to match, so any manifest edit needed a rehash.
 #   - It ran npm, which then had to be lied to about devDependencies,
 #     workspaces, devEngines and overrides, because npm compares the lockfile
@@ -187,11 +187,8 @@ else
     # Requires network access, so the sandbox must be off:
     #   nix build --option sandbox false .#packages.<system>.pi-<key>
     # Verified: inside the sandbox curl cannot resolve registry.npmjs.org
-    # (exit 6); with sandbox=false it gets HTTP 200. This is the only reason
-    # these packages are uncacheable elsewhere -- once CI pushes one to Attic,
-    # consumers get it as a normal substituter fetch with no flags.
-    # (The stale numbers that used to be here -- 1663/1833 -- are gone; the
-    # split is in README.md and scripts/update-readme-stats.mjs keeps it right.)
+    # (exit 6); with sandbox=false it gets HTTP 200. There is no binary cache
+    # to fetch these from any more, so the flag is the only way to build one.
     buildPhase = ''
       # stdenv sets SSL_CERT_FILE=/no-cert-file.crt which breaks TLS;
       # unset + set reject to 0 for child processes that re-read env

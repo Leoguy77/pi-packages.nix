@@ -74,15 +74,10 @@ Registry entry:
 
 ## Binary cache
 
-Optional. CI builds everything and pushes to Attic at
-`nix-cache.lsinfra.de/pi-packages`, which makes installs near-instant:
-
-```nix
-nix.settings = {
-  extra-substituters = [ "https://nix-cache.lsinfra.de/pi-packages" ];
-  extra-trusted-public-keys = [ "pi-packages:OF+SNU2ALJB8M+cQP/RfFOuKIOMN0w4WiV8k01pvUC4=" ];
-};
-```
+None. Every dependency is fetched from npm by its own hash, so a build needs no
+substituter and no pre-populated cache. The project used to run an Attic cache at
+`nix-cache.lsinfra.de/pi-packages`; that is no longer needed or maintained, and the
+workflow that filled it has been removed.
 
 ## Development
 
