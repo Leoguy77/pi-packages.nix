@@ -15,6 +15,11 @@ on:
   pull_request:
     branches: [main]
   schedule:
+    # Every 2 hours except 02:00, which is the daily pruning run below. The crawl is ~80s of
+    # npm search and the lockfile pass ~160s, so a run is cheap; what used to make this a
+    # nightly job was the prune, which now goes at 30 req/s instead of 8.5. Pruning daily is
+    # enough, and two crons matching the same hour would queue two runs behind each other.
+    - cron: '0 0,4,8,12,16,20 * * *'
     - cron: '0 2 * * *'
 
 jobs:
@@ -46,10 +51,11 @@ jobs:
           REGISTRY_ONLY: '1'
           CONCURRENCY: '4'
           REFRESH_STALE: ${{ github.event.inputs.refresh || '1' }}
-          # Drop packages npm unpublished. Without this the registry is append-only,
-          # so dead entries fail every cache build with a permanent 404 (71 in run
-          # 45196913983) and the failure list never shortens.
-          PRUNE: '1'
+          # Prune only on the scheduled 02:00 run, and not on the 2-hourly ones: the crawl
+          # is ~1.5 min and the prune ~6.5 min, so pruning every 2 hours would spend most
+          # of the job asking npm about packages that are still there. A dead package no
+          # one has published over survives until 02:00, which is fine.
+          PRUNE: ${{ (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 2 * * *') && '1' || '0' }}
       - name: Report pruned packages
         if: always()
         run: |
