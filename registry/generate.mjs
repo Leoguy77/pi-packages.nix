@@ -234,9 +234,10 @@ function lockfileVersion(lockPath) {
 }
 
 // True when the lockfile declares a dependency it cannot resolve. npm ci stops with
-// "Missing: <name>@ from lock file" instead of installing, so such a lockfile is
-// unusable offline. Platform-specific optional deps are the common cause: only the
-// binary for the generating platform resolves, the rest stay as bare names.
+// "Missing: <name>@ from lock file" instead of installing, so such a lockfile can only
+// be installed with network access. Platform-specific optional deps are the common
+// cause: only the binary for the generating platform resolves, the rest stay as bare
+// names.
 function lockfileHasDanglingRefs(lockPath) {
   let lock;
   try { lock = JSON.parse(readFileSync(lockPath, 'utf8')); } catch { return false; }
@@ -257,8 +258,8 @@ function lockfileHasDanglingRefs(lockPath) {
   };
   for (const [k, e] of Object.entries(pk)) {
     // A link entry points at a path ("../pi-libtui") that the published tarball does not
-    // contain, so npm ci cannot restore it and prefetch-npm-deps cannot cache it. Such a
-    // lockfile may have no dangling declaration at all and still install nothing.
+    // contain, so it names a directory nothing can fetch. Such a lockfile may have no
+    // dangling declaration at all and still install nothing.
     if (e?.link) return true;
     for (const f of ['dependencies', 'optionalDependencies']) {
       if (!e[f]) continue;
@@ -294,10 +295,10 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
     execSync(`curl -sL --max-time 30 '${tarballUrl}' -o ${workDir}/pkg.tgz`, { stdio: 'pipe', timeout: 35000 });
     execSync(`tar -xzf ${workDir}/pkg.tgz --strip-components=1 -C ${workDir}/pkg`, { stdio: 'pipe', timeout: 10000 });
     // Packages that ship a vendored node_modules (npm "bundleDependencies") make npm
-    // record those deps as inBundle with no resolved/integrity. prefetch-npm-deps then
-    // skips them ("7 out of 19 packages are missing 'resolved' URLs") and npm ci
-    // --offline fails with ENOTCACHED. Removing the tree makes npm resolve them from the
-    // registry like any other dependency, which is what the offline cache needs.
+    // record those deps as inBundle with no resolved/integrity. Those entries name no
+    // tarball, so a build cannot fetch them. Removing the tree makes npm resolve them
+    // from the registry like any other dependency, which gives the build a URL and a
+    // hash for each — the bundled copy still ships in the tarball and wins at runtime.
     execSync(`rm -rf ${workDir}/pkg/node_modules`, { stdio: 'pipe', timeout: 10000 });
     // A tarball can be a workspace root, with member manifests under packages/*. npm
     // reads every member's package.json, so a `workspace:*` dependency declared by a
@@ -369,10 +370,9 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           // link: specs are always external symlinks, never a directory in the tarball.
           const rel = v.replace(/^(file|link):/, '');
           // A vendored tarball (file:./vendor/fumadb-0.3.0-382dcd65.tgz) is recorded with
-          // that same file: URL as its resolved location, and prefetch-npm-deps rejects it
-          // outright ("couldn't fetch node_modules/fumadb at file:///vendor/...: invalid
-          // format"). "fumadb" is published on npm, so "*" makes npm take the registry
-          // copy and the cache can be built. An unpublished one still fails here and
+          // that same file: URL as its resolved location, which no build can fetch
+          // ("invalid format"). "fumadb" is published on npm, so "*" makes npm take the
+          // registry copy, which does have a URL and a hash. An unpublished one still
           // falls back to the inline install, which is the same as before this change.
           if (!v.startsWith('file:') || /\.tgz$|\.tar\.gz$/i.test(rel)) { pj[field][n] = '*'; continue; }
           const subPkg = v.startsWith('file:') ? join(workDir, 'pkg', rel, 'package.json') : null;
@@ -406,11 +406,10 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
       }
       // Drop bundleDependencies/bundledDependencies. npm marks those packages
       // "inBundle": true, which writes the entry without a resolved URL even when the
-      // tree is gone and the package is on npm. prefetch-npm-deps skips any entry with
-      // no resolved URL, so npmDeps cannot be built at all:
-      //   "No cacheable dependencies were found"
-      // (e.g. @ayulab/oh-my-pi bundling @ayulab/pi-rewind). Pinning the bundle as a
-      // normal dependency resolves it from the registry like anything else.
+      // tree is gone and the package is on npm. An entry with no resolved URL names no
+      // tarball, so the build could not fetch it (e.g. @ayulab/oh-my-pi bundling
+      // @ayulab/pi-rewind). Pinning the bundle as a normal dependency resolves it from
+      // the registry like anything else.
       if (pj.bundleDependencies || pj.bundledDependencies) {
         delete pj.bundleDependencies;
         delete pj.bundledDependencies;
@@ -421,19 +420,19 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
     }
     await runNpmLock(workDir);
     
-    // Pi packages declare the host (pi itself) as peerDependencies. When they are not
-    // marked optional, `npm ci` inside buildNpmPackage demands them in the fixed-output
-    // derivation and fails with ENOTCACHED (@earendil-works/pi-ai). Mark every host peer
-    // optional in the lockfile so the build treats them as provided by the runtime.
+    // Pi packages declare the host (pi itself) as peerDependencies. Mark every host peer
+    // optional in the lockfile so the tree is complete without them: pi provides them
+    // at runtime, and a required peer with no version in the lockfile is an entry the
+    // build cannot assemble.
     const lockFile = join(workDir, 'pkg', 'package-lock.json');
     if (existsSync(lockFile)) {
       const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
       const pk = lock.packages || {};
       // Drop workspace link entries. npm records them as `"link": true` with a relative
       // `resolved` such as "../runtime", which does not exist inside the published
-      // tarball, so prefetch-npm-deps skips the entry and npm ci cannot restore it.
-      // The strip is safe because a link target is either another workspace (already
-      // removed with `workspaces`) or a path outside the tarball.
+      // tarball, so the entry names a path no build can fetch. The strip is safe because
+      // a link target is either another workspace (already removed with `workspaces`) or
+      // a path outside the tarball.
       let droppedLinks = 0;
       for (const [k, e] of Object.entries(pk)) {
         if (!e || !e.link) continue;
@@ -441,10 +440,9 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
         droppedLinks++;
       }
       // A nested copy of a workspace package keeps a `version` but loses its `resolved`
-      // URL, so prefetch-npm-deps skips it and npm ci then reaches for the network
-      // (@xterm/headless in pi-copy-mode). Drop such a copy only when the same
-      // name@version is also present with a resolved URL, which npm uses instead;
-      // dropping an only copy would just turn into "Missing: <name>@ from lock file".
+      // URL, so the entry names no tarball (@xterm/headless in pi-copy-mode). Drop such a
+      // copy only when the same name@version is also present with a resolved URL, which
+      // is the one the tree will use anyway; dropping an only copy would lose the module.
       const nameOf = k => k.slice(k.lastIndexOf('node_modules/') + 'node_modules/'.length);
       for (const [k, e] of Object.entries(pk)) {
         if (!k || !e || e.link || !e.version || e.resolved) continue;
@@ -465,7 +463,7 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           }
         }
       }
-      // Declarations whose target has no version cannot be installed offline: npm ci
+      // Declarations whose target has no version name a tarball nothing can fetch: npm ci
       // reports "Missing: <name>@ from lock file" and stops. This happens at every
       // level, not just the root -- @edxeth/fff-node lists eight platform binaries as
       // optional deps but only the Linux x64 one resolved on this platform, so the
@@ -499,10 +497,10 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
       // The host packages (pi itself) are provided by the runtime, never installed, and
       // mkPiPackage.nix deletes every declaration of them from package.json before npm
       // runs. Entries for them in the lockfile are therefore dead weight -- and when one
-      // arrives nested (a plugin that shipped the host as a devDependency) npm records it
-      // with a resolved URL but no integrity, so prefetch-npm-deps refuses the whole
-      // lockfile: "non-git dependencies should have associated integrity". Drop them at
-      // every depth, plus any declaration pointing at them, so the lockfile matches the
+      // arrive nested (a plugin that shipped the host as a devDependency) npm records it
+      // with a resolved URL but no integrity, so the whole lockfile is rejected:
+      // "non-git dependencies should have associated integrity". Drop them at every
+      // depth, plus any declaration pointing at them, so the lockfile matches the
       // manifest the build actually uses.
       let droppedHost = 0;
       const hostNames = new Set(HOST_DEPS);
@@ -525,10 +523,10 @@ async function generateLockfile(name, tarballUrl, key, targetVersion) {
           }
         }
       }
-      // Pi packages declare the host (pi itself) as peerDependencies. When they are not
-      // marked optional, `npm ci` inside buildNpmPackage demands them in the fixed-output
-      // derivation and fails with ENOTCACHED (@earendil-works/pi-ai). Mark every host peer
-      // optional in the lockfile so the build treats them as provided by the runtime.
+      // Pi packages declare the host (pi itself) as peerDependencies. Mark every host peer
+      // optional in the lockfile so the tree is complete without them: pi provides them
+      // at runtime, and a required peer with no version in the lockfile is an entry the
+      // build cannot assemble.
       const rootPkg = lock.packages?.[''];
       if (rootPkg?.peerDependencies) {
         const hostPeers = HOST_DEPS.filter((d) => d in rootPkg.peerDependencies);
