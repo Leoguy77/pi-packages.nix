@@ -47,7 +47,8 @@ const TMP = process.env.PI_REGISTRY_TMPDIR
   ? join(process.env.PI_REGISTRY_TMPDIR, 'pi-registry-gen')
   : join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'pi-registry-gen');
 
-// Token-bucket rate limiter: 1 request per 250ms globally
+// Token-bucket rate limiter: 1 request per 250ms. Only the search and packument
+// endpoints need it; it is not applied to tarball HEADs (see checkTarball).
 let lastRequest = 0;
 async function rateLimit() {
   const now = Date.now();
@@ -567,15 +568,19 @@ async function pruneDead(packages) {
   process.stderr.write(`Pruning: checking ${keys.length} tarballs...\n`);
   const removed = [];
   let checked = 0;
+  // Tarball HEADs, not search queries: npm serves these from its CDN and returns 200
+  // at 30/s sustained (measured 600/600 over 20s), so the 250ms limiter that guards the
+  // search API does not belong here. It held this step to 8.5 req/s, which is 27 of the
+  // job's ~30 minutes. A 429 here is harmless: the catch keeps the entry.
+  const PRUNE_CONCURRENCY = 16;
 
-  for (let i = 0; i < keys.length; i += CONCURRENCY) {
-    await Promise.all(keys.slice(i, i + CONCURRENCY).map(async (key) => {
+  for (let i = 0; i < keys.length; i += PRUNE_CONCURRENCY) {
+    await Promise.all(keys.slice(i, i + PRUNE_CONCURRENCY).map(async (key) => {
       const entry = packages[key];
       checked++;
       if (checked % 500 === 0) process.stderr.write(`  ${checked}/${keys.length}, removed ${removed.length}\n`);
       if (!entry?.tarball) return;
       try {
-        await rateLimit();
         const res = await fetch(entry.tarball, { method: 'HEAD' });
         if (res.status !== 404) return;
         // Second signal: a live package must also look gone in its packument.
